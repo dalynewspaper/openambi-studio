@@ -18,35 +18,11 @@ targets:
     deploymentTarget: '17.0'
     sources:
       - path: openambi-studio
-    info:
-      path: openambi-studio/Info.plist
-      properties:
-        CFBundleDevelopmentRegion: $(DEVELOPMENT_LANGUAGE)
-        CFBundleDisplayName: $(PRODUCT_NAME)
-        CFBundleExecutable: $(EXECUTABLE_NAME)
-        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
-        CFBundleInfoDictionaryVersion: 6.0
-        CFBundleName: $(PRODUCT_NAME)
-        CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        LSRequiresIPhoneOS: true
-        UIApplicationSupportsIndirectInputEvents: true
-        UILaunchStoryboardName: LaunchScreen
-        UIRequiredDeviceCapabilities: [arm64]
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-    schemes:
-      - name: openambi-studio
-        build:
-          targets:
-            openambi-studio: all
-        run:
-          config: Debug
+    settings:
+      base:
+        INFOPLIST_KEY_CFBundleDisplayName: openambi-studio
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+        INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        GENERATE_INFOPLIST_FILE: true

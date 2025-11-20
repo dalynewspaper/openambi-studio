@@ -8,14 +8,25 @@
 
 /* Begin PBXBuildFile section */
 		0089DADF68B12CE0F3EA1115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */; };
+		7B871153D2444D667752FB47 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B59A619D4379AD3355AAF72B /* Theme.swift */; };
+		7D933308AF319F9E1CD7C310 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00DB68D59072E3D5213296F1 /* ContentView.swift */; };
+		BC1B882C5AC40DB1FC244A06 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F5395B730BB8D40CDB1BEC /* DashboardView.swift */; };
+		C711FF9B93A27C856BE75F06 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CAF1AF76D9A09661BD0076 /* App.swift */; };
+		DE3B42F690CCE3D88E02F334 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645D8054FA56942483048B8A /* ProjectsView.swift */; };
+		E0FCAE4B4F7DD3223FC731E4 /* RecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A945217DBFF31FE11DF9355 /* RecordView.swift */; };
 		FF5F3ECEB15066F571C37056 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		00DB68D59072E3D5213296F1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		07F5395B730BB8D40CDB1BEC /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		305122168590D3CEF9B0FC29 /* openambi-studio.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "openambi-studio.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		57CAF1AF76D9A09661BD0076 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		5A945217DBFF31FE11DF9355 /* RecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordView.swift; sourceTree = "<group>"; };
+		645D8054FA56942483048B8A /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
 		B50E43E64CAB991748B10CB3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		D7B2E6E5E3C9C6BFD4A4C0F3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B59A619D4379AD3355AAF72B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -38,9 +49,14 @@
 		5F436B51046481B1EEB5CE05 /* openambi-studio */ = {
 			isa = PBXGroup;
 			children = (
+				57CAF1AF76D9A09661BD0076 /* App.swift */,
 				4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */,
-				D7B2E6E5E3C9C6BFD4A4C0F3 /* Info.plist */,
+				00DB68D59072E3D5213296F1 /* ContentView.swift */,
+				07F5395B730BB8D40CDB1BEC /* DashboardView.swift */,
 				8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */,
+				645D8054FA56942483048B8A /* ProjectsView.swift */,
+				5A945217DBFF31FE11DF9355 /* RecordView.swift */,
+				B59A619D4379AD3355AAF72B /* Theme.swift */,
 			);
 			path = "openambi-studio";
 			sourceTree = "<group>";
@@ -111,6 +127,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C711FF9B93A27C856BE75F06 /* App.swift in Sources */,
+				7D933308AF319F9E1CD7C310 /* ContentView.swift in Sources */,
+				BC1B882C5AC40DB1FC244A06 /* DashboardView.swift in Sources */,
+				DE3B42F690CCE3D88E02F334 /* ProjectsView.swift in Sources */,
+				E0FCAE4B4F7DD3223FC731E4 /* RecordView.swift in Sources */,
+				7B871153D2444D667752FB47 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -143,7 +165,12 @@
 		246136642BA0EE751EDE9D8D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				INFOPLIST_FILE = "openambi-studio/Info.plist";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "openambi-studio";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 			};
 			name = Debug;
@@ -163,7 +190,12 @@
 		6277BDC2B749A16D4D4B59F3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				INFOPLIST_FILE = "openambi-studio/Info.plist";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "openambi-studio";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 			};
 			name = Release;
