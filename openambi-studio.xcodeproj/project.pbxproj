@@ -1,0 +1,195 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0089DADF68B12CE0F3EA1115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */; };
+		FF5F3ECEB15066F571C37056 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		305122168590D3CEF9B0FC29 /* openambi-studio.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "openambi-studio.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B50E43E64CAB991748B10CB3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		D7B2E6E5E3C9C6BFD4A4C0F3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0BC6739315A1F5D2EDE49757 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				305122168590D3CEF9B0FC29 /* openambi-studio.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0EB99F9EEE1DFD66E02DCDDC = {
+			isa = PBXGroup;
+			children = (
+				5F436B51046481B1EEB5CE05 /* openambi-studio */,
+				0BC6739315A1F5D2EDE49757 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5F436B51046481B1EEB5CE05 /* openambi-studio */ = {
+			isa = PBXGroup;
+			children = (
+				4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */,
+				D7B2E6E5E3C9C6BFD4A4C0F3 /* Info.plist */,
+				8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */,
+			);
+			path = "openambi-studio";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4AFC4523971C7DDC675E4635 /* openambi-studio */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B844196864BF477A46EB341B /* Build configuration list for PBXNativeTarget "openambi-studio" */;
+			buildPhases = (
+				08C8FA54299CB4DD71003EEB /* Sources */,
+				7D78C0192875C328A9F64E32 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "openambi-studio";
+			packageProductDependencies = (
+			);
+			productName = "openambi-studio";
+			productReference = 305122168590D3CEF9B0FC29 /* openambi-studio.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8EEF815603C9D2A9350A6E1F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+			};
+			buildConfigurationList = 8C9923D8BA887DC0F88845CA /* Build configuration list for PBXProject "openambi-studio" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0EB99F9EEE1DFD66E02DCDDC;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4AFC4523971C7DDC675E4635 /* openambi-studio */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7D78C0192875C328A9F64E32 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0089DADF68B12CE0F3EA1115 /* Assets.xcassets in Resources */,
+				FF5F3ECEB15066F571C37056 /* LaunchScreen.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		08C8FA54299CB4DD71003EEB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B50E43E64CAB991748B10CB3 /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		1C2132A05B59913E0F20CE51 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.openambistudio;
+				PRODUCT_NAME = "openambi-studio";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		246136642BA0EE751EDE9D8D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = "openambi-studio/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		4676AC221524D15203675BB1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.openambistudio;
+				PRODUCT_NAME = "openambi-studio";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		6277BDC2B749A16D4D4B59F3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = "openambi-studio/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		8C9923D8BA887DC0F88845CA /* Build configuration list for PBXProject "openambi-studio" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1C2132A05B59913E0F20CE51 /* Debug */,
+				4676AC221524D15203675BB1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B844196864BF477A46EB341B /* Build configuration list for PBXNativeTarget "openambi-studio" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				246136642BA0EE751EDE9D8D /* Debug */,
+				6277BDC2B749A16D4D4B59F3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8EEF815603C9D2A9350A6E1F /* Project object */;
+}
