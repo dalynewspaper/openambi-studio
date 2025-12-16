@@ -3,37 +3,148 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		0089DADF68B12CE0F3EA1115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */; };
 		7B871153D2444D667752FB47 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B59A619D4379AD3355AAF72B /* Theme.swift */; };
 		7D933308AF319F9E1CD7C310 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00DB68D59072E3D5213296F1 /* ContentView.swift */; };
-		BC1B882C5AC40DB1FC244A06 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F5395B730BB8D40CDB1BEC /* DashboardView.swift */; };
+		953F37B02EE3A705007EA25C /* RecordingMetadataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */; };
+		953F37B12EE3A705007EA25C /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37AF2EE3A705007EA25C /* RecordingView.swift */; };
+		953F37B32EE3A793007EA25C /* RecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37B22EE3A793007EA25C /* RecordingManager.swift */; };
+		953F37C32EEDD240007EA25C /* UserRecordingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37C22EEDD240007EA25C /* UserRecordingsView.swift */; };
+		953F37C52EEDE10E007EA25C /* EditRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37C42EEDE10E007EA25C /* EditRecordingView.swift */; };
+		95C633B72ED8644E0051DBA3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 95C633B62ED8644E0051DBA3 /* WidgetKit.framework */; };
+		95C633B92ED8644E0051DBA3 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 95C633B82ED8644E0051DBA3 /* SwiftUI.framework */; };
+		95C633CA2ED8644F0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 95C633B42ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* AmbientMixerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* AmbientMixerView.swift */; };
+		A3B4C5D6E7F8A9B0C1D2E3 /* KodeMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A3B4C5D6E7F8A9B0C1D2E4 /* KodeMono-Bold.ttf */; };
+		A7B8C9D0E1F2A3B4C5D6E7F8 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2A3B4C5D6E7F9 /* AuthManager.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* AudioTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A4 /* AudioTrack.swift */; };
+		B8C9D0E1F2A3B4C5D6E7F8 /* StatePersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C9D0E1F2A3B4C5D6E7F9 /* StatePersistenceService.swift */; };
+		B9C0D1E2F3A4B5C6D7E8F9A0 /* AuthenticationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C0D1E2F3A4B5C6D7E8F9A1 /* AuthenticationView.swift */; };
+		C1D2E3F4A5B6C7D8E9F0A1 /* ProfileButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A2 /* ProfileButton.swift */; };
+		C3D4E5F6A7B8C9D0E1F2A3B4 /* AudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9D0E1F2A3B5 /* AudioManager.swift */; };
 		C711FF9B93A27C856BE75F06 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CAF1AF76D9A09661BD0076 /* App.swift */; };
-		DE3B42F690CCE3D88E02F334 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645D8054FA56942483048B8A /* ProjectsView.swift */; };
-		E0FCAE4B4F7DD3223FC731E4 /* RecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A945217DBFF31FE11DF9355 /* RecordView.swift */; };
+		C9D0E1F2A3B4C5D6E7F8A9 /* SimpleLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D0E1F2A3B4C5D6E7F8AA /* SimpleLoadingView.swift */; };
+		D0E1F2A3B4C5D6E7F8A9B0 /* KodeMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D0E1F2A3B4C5D6E7F8A9B1 /* KodeMono-Regular.ttf */; };
+		D4E5F6A7B8C9D0E1F2A3B4C5 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C6 /* SupabaseService.swift */; };
+		E1F2A3B4C5D6E7F8A9B0C1 /* KodeMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C2 /* KodeMono-Medium.ttf */; };
+		E5F6A7B8C9D0E1F2A3B4C5D6 /* SupabaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F6A7B8C9D0E1F2A3B4C5D7 /* SupabaseConfig.swift */; };
+		E9F0A1B2C3D4E5F6A7B8C9 /* AudioCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F0A1B2C3D4E5F6A7B8CA /* AudioCacheService.swift */; };
+		F0A1B2C3D4E5F6A7B8C9D0 /* PerformanceOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D1 /* PerformanceOptimizer.swift */; };
+		F1A2B3C4D5E6F7A8B9C0D1 /* WidgetUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D2 /* WidgetUpdateService.swift */; };
+		F2A3B4C5D6E7F8A9B0C1D2 /* KodeMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8A9B0C1D3 /* KodeMono-SemiBold.ttf */; };
+		F5A6B7C8D9E0F1A2B3C4D5E6 /* OpenAmbiShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A6B7C8D9E0F1A2B3C4D5E7 /* OpenAmbiShortcuts.swift */; };
+		F7A8B9C0D1E2F3A4B5C6D7E8 /* FrequencyGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A8B9C0D1E2F3A4B5C6D7E9 /* FrequencyGenerator.swift */; };
+		F8A9B0C1D2E3F4A5B6C7D8E9F0 /* FrequencyPresetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A9B0C1D2E3F4A5B6C7D8E9F1 /* FrequencyPresetService.swift */; };
+		F9A8B7C6D5E4F3A2B1C0D9E8 /* Soundscape3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A8B7C6D5E4F3A2B1C0D9E9 /* Soundscape3DView.swift */; };
 		FF5F3ECEB15066F571C37056 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */; };
+		P1R2O3F4I5L6E7E8D9I0T1V2 /* ProfileEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */; };
+		S1E2T3T4I5N6G7S8V9I0E1W2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */; };
+		S2E3T4I5N6G7S8V9I0E1W4 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		95C633C82ED8644F0051DBA3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8EEF815603C9D2A9350A6E1F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 95C633B32ED8644E0051DBA3;
+			remoteInfo = OpenAmbiWidgetExtensionExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		95C633CB2ED8644F0051DBA3 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				95C633CA2ED8644F0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		00DB68D59072E3D5213296F1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		07F5395B730BB8D40CDB1BEC /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
-		305122168590D3CEF9B0FC29 /* openambi-studio.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "openambi-studio.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		305122168590D3CEF9B0FC29 /* openambi-studio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "openambi-studio.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		57CAF1AF76D9A09661BD0076 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
-		5A945217DBFF31FE11DF9355 /* RecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordView.swift; sourceTree = "<group>"; };
-		645D8054FA56942483048B8A /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
+		953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingMetadataView.swift; sourceTree = "<group>"; };
+		953F37AF2EE3A705007EA25C /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
+		953F37B22EE3A793007EA25C /* RecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManager.swift; sourceTree = "<group>"; };
+		953F37C22EEDD240007EA25C /* UserRecordingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRecordingsView.swift; sourceTree = "<group>"; };
+		953F37C42EEDE10E007EA25C /* EditRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditRecordingView.swift; sourceTree = "<group>"; };
+		958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "openambi-studio.entitlements"; sourceTree = "<group>"; };
+		95C633B42ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenAmbiWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		95C633B62ED8644E0051DBA3 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		95C633B82ED8644E0051DBA3 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		95FF089E2ED47D0200383F10 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F3 /* AmbientMixerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientMixerView.swift; sourceTree = "<group>"; };
+		A3B4C5D6E7F8A9B0C1D2E4 /* KodeMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-Bold.ttf"; sourceTree = "<group>"; };
+		A7B8C9D0E1F2A3B4C5D6E7F9 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A7B8C9D0E1F2A4 /* AudioTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTrack.swift; sourceTree = "<group>"; };
 		B50E43E64CAB991748B10CB3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		B59A619D4379AD3355AAF72B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		B8C9D0E1F2A3B4C5D6E7F9 /* StatePersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatePersistenceService.swift; sourceTree = "<group>"; };
+		B9C0D1E2F3A4B5C6D7E8F9A1 /* AuthenticationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationView.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8E9F0A2 /* ProfileButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileButton.swift; sourceTree = "<group>"; };
+		C3D4E5F6A7B8C9D0E1F2A3B5 /* AudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioManager.swift; sourceTree = "<group>"; };
+		C9D0E1F2A3B4C5D6E7F8AA /* SimpleLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLoadingView.swift; sourceTree = "<group>"; };
+		D0E1F2A3B4C5D6E7F8A9B1 /* KodeMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-Regular.ttf"; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4C6 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D6E7F8A9B0C2 /* KodeMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-Medium.ttf"; sourceTree = "<group>"; };
+		E5F6A7B8C9D0E1F2A3B4C5D7 /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseConfig.swift; sourceTree = "<group>"; };
+		E9F0A1B2C3D4E5F6A7B8CA /* AudioCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCacheService.swift; sourceTree = "<group>"; };
+		F0A1B2C3D4E5F6A7B8C9D1 /* PerformanceOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceOptimizer.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D2 /* WidgetUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetUpdateService.swift; sourceTree = "<group>"; };
+		F2A3B4C5D6E7F8A9B0C1D3 /* KodeMono-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-SemiBold.ttf"; sourceTree = "<group>"; };
+		F5A6B7C8D9E0F1A2B3C4D5E7 /* OpenAmbiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAmbiShortcuts.swift; sourceTree = "<group>"; };
+		F7A8B9C0D1E2F3A4B5C6D7E9 /* FrequencyGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyGenerator.swift; sourceTree = "<group>"; };
+		F8A9B0C1D2E3F4A5B6C7D8E9F1 /* FrequencyPresetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyPresetService.swift; sourceTree = "<group>"; };
+		F9A8B7C6D5E4F3A2B1C0D9E9 /* Soundscape3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Soundscape3DView.swift; sourceTree = "<group>"; };
+		P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditView.swift; sourceTree = "<group>"; };
+		S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		95C633CE2ED8644F0051DBA3 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 95C633B32ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		95C633BA2ED8644E0051DBA3 /* OpenAmbiWidgetExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (95C633CE2ED8644F0051DBA3 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = OpenAmbiWidgetExtension; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		95C633B12ED8644E0051DBA3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				95C633B92ED8644E0051DBA3 /* SwiftUI.framework in Frameworks */,
+				95C633B72ED8644E0051DBA3 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0BC6739315A1F5D2EDE49757 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				305122168590D3CEF9B0FC29 /* openambi-studio.app */,
+				95C633B42ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -42,6 +153,8 @@
 			isa = PBXGroup;
 			children = (
 				5F436B51046481B1EEB5CE05 /* openambi-studio */,
+				95C633BA2ED8644E0051DBA3 /* OpenAmbiWidgetExtension */,
+				95C633B52ED8644E0051DBA3 /* Frameworks */,
 				0BC6739315A1F5D2EDE49757 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -49,16 +162,93 @@
 		5F436B51046481B1EEB5CE05 /* openambi-studio */ = {
 			isa = PBXGroup;
 			children = (
+				953F37C42EEDE10E007EA25C /* EditRecordingView.swift */,
+				953F37C22EEDD240007EA25C /* UserRecordingsView.swift */,
+				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
+				953F37AF2EE3A705007EA25C /* RecordingView.swift */,
+				958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */,
+				95FF089E2ED47D0200383F10 /* Info.plist */,
 				57CAF1AF76D9A09661BD0076 /* App.swift */,
 				4FC7C7928C3F0D74B1B9EFDB /* Assets.xcassets */,
 				00DB68D59072E3D5213296F1 /* ContentView.swift */,
-				07F5395B730BB8D40CDB1BEC /* DashboardView.swift */,
 				8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */,
-				645D8054FA56942483048B8A /* ProjectsView.swift */,
-				5A945217DBFF31FE11DF9355 /* RecordView.swift */,
 				B59A619D4379AD3355AAF72B /* Theme.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F3 /* AmbientMixerView.swift */,
+				F9A8B7C6D5E4F3A2B1C0D9E9 /* Soundscape3DView.swift */,
+				B9C0D1E2F3A4B5C6D7E8F9A1 /* AuthenticationView.swift */,
+				C1D2E3F4A5B6C7D8E9F0A2 /* ProfileButton.swift */,
+				C9D0E1F2A3B4C5D6E7F8AA /* SimpleLoadingView.swift */,
+				S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */,
+				P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */,
+				F1A2B3C4D5E6F7A8B9C0D1E2 /* Models */,
+				F2A3B4C5D6E7F8A9B0C1D2E3 /* Services */,
+				F3A4B5C6D7E8F9A0B1C2D3E4 /* Config */,
+				F5A6B7C8D9E0F1A2B3C4D5E8 /* Intents */,
+				F4A5B6C7D8E9F0A1B2C3D4E5 /* Fonts */,
 			);
 			path = "openambi-studio";
+			sourceTree = "<group>";
+		};
+		95C633B52ED8644E0051DBA3 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				95C633B62ED8644E0051DBA3 /* WidgetKit.framework */,
+				95C633B82ED8644E0051DBA3 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		F1A2B3C4D5E6F7A8B9C0D1E2 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B2C3D4E5F6A7B8C9D0E1F2A4 /* AudioTrack.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		F2A3B4C5D6E7F8A9B0C1D2E3 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				953F37B22EE3A793007EA25C /* RecordingManager.swift */,
+				C3D4E5F6A7B8C9D0E1F2A3B5 /* AudioManager.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4C6 /* SupabaseService.swift */,
+				A7B8C9D0E1F2A3B4C5D6E7F9 /* AuthManager.swift */,
+				B8C9D0E1F2A3B4C5D6E7F9 /* StatePersistenceService.swift */,
+				E9F0A1B2C3D4E5F6A7B8CA /* AudioCacheService.swift */,
+				F0A1B2C3D4E5F6A7B8C9D1 /* PerformanceOptimizer.swift */,
+				F1A2B3C4D5E6F7A8B9C0D2 /* WidgetUpdateService.swift */,
+				F7A8B9C0D1E2F3A4B5C6D7E9 /* FrequencyGenerator.swift */,
+				F8A9B0C1D2E3F4A5B6C7D8E9F1 /* FrequencyPresetService.swift */,
+				S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		F3A4B5C6D7E8F9A0B1C2D3E4 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				E5F6A7B8C9D0E1F2A3B4C5D7 /* SupabaseConfig.swift */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		F4A5B6C7D8E9F0A1B2C3D4E5 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				D0E1F2A3B4C5D6E7F8A9B1 /* KodeMono-Regular.ttf */,
+				E1F2A3B4C5D6E7F8A9B0C2 /* KodeMono-Medium.ttf */,
+				F2A3B4C5D6E7F8A9B0C1D3 /* KodeMono-SemiBold.ttf */,
+				A3B4C5D6E7F8A9B0C1D2E4 /* KodeMono-Bold.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		F5A6B7C8D9E0F1A2B3C4D5E8 /* Intents */ = {
+			isa = PBXGroup;
+			children = (
+				F5A6B7C8D9E0F1A2B3C4D5E7 /* OpenAmbiShortcuts.swift */,
+			);
+			path = Intents;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -70,10 +260,12 @@
 			buildPhases = (
 				08C8FA54299CB4DD71003EEB /* Sources */,
 				7D78C0192875C328A9F64E32 /* Resources */,
+				95C633CB2ED8644F0051DBA3 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				95C633C92ED8644F0051DBA3 /* PBXTargetDependency */,
 			);
 			name = "openambi-studio";
 			packageProductDependencies = (
@@ -82,6 +274,28 @@
 			productReference = 305122168590D3CEF9B0FC29 /* openambi-studio.app */;
 			productType = "com.apple.product-type.application";
 		};
+		95C633B32ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 95C633CF2ED8644F0051DBA3 /* Build configuration list for PBXNativeTarget "OpenAmbiWidgetExtensionExtension" */;
+			buildPhases = (
+				95C633B02ED8644E0051DBA3 /* Sources */,
+				95C633B12ED8644E0051DBA3 /* Frameworks */,
+				95C633B22ED8644E0051DBA3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				95C633BA2ED8644E0051DBA3 /* OpenAmbiWidgetExtension */,
+			);
+			name = OpenAmbiWidgetExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = OpenAmbiWidgetExtensionExtension;
+			productReference = 95C633B42ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -89,7 +303,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 2610;
+				TargetAttributes = {
+					95C633B32ED8644E0051DBA3 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
 			};
 			buildConfigurationList = 8C9923D8BA887DC0F88845CA /* Build configuration list for PBXProject "openambi-studio" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -101,11 +321,11 @@
 			);
 			mainGroup = 0EB99F9EEE1DFD66E02DCDDC;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				4AFC4523971C7DDC675E4635 /* openambi-studio */,
+				95C633B32ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -117,6 +337,17 @@
 			files = (
 				0089DADF68B12CE0F3EA1115 /* Assets.xcassets in Resources */,
 				FF5F3ECEB15066F571C37056 /* LaunchScreen.storyboard in Resources */,
+				D0E1F2A3B4C5D6E7F8A9B0 /* KodeMono-Regular.ttf in Resources */,
+				E1F2A3B4C5D6E7F8A9B0C1 /* KodeMono-Medium.ttf in Resources */,
+				F2A3B4C5D6E7F8A9B0C1D2 /* KodeMono-SemiBold.ttf in Resources */,
+				A3B4C5D6E7F8A9B0C1D2E3 /* KodeMono-Bold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		95C633B22ED8644E0051DBA3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,14 +360,51 @@
 			files = (
 				C711FF9B93A27C856BE75F06 /* App.swift in Sources */,
 				7D933308AF319F9E1CD7C310 /* ContentView.swift in Sources */,
-				BC1B882C5AC40DB1FC244A06 /* DashboardView.swift in Sources */,
-				DE3B42F690CCE3D88E02F334 /* ProjectsView.swift in Sources */,
-				E0FCAE4B4F7DD3223FC731E4 /* RecordView.swift in Sources */,
 				7B871153D2444D667752FB47 /* Theme.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* AmbientMixerView.swift in Sources */,
+				F9A8B7C6D5E4F3A2B1C0D9E8 /* Soundscape3DView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* AudioTrack.swift in Sources */,
+				C3D4E5F6A7B8C9D0E1F2A3B4 /* AudioManager.swift in Sources */,
+				953F37C32EEDD240007EA25C /* UserRecordingsView.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4C5 /* SupabaseService.swift in Sources */,
+				953F37B02EE3A705007EA25C /* RecordingMetadataView.swift in Sources */,
+				953F37B12EE3A705007EA25C /* RecordingView.swift in Sources */,
+				E5F6A7B8C9D0E1F2A3B4C5D6 /* SupabaseConfig.swift in Sources */,
+				B8C9D0E1F2A3B4C5D6E7F8 /* StatePersistenceService.swift in Sources */,
+				E9F0A1B2C3D4E5F6A7B8C9 /* AudioCacheService.swift in Sources */,
+				F0A1B2C3D4E5F6A7B8C9D0 /* PerformanceOptimizer.swift in Sources */,
+				F1A2B3C4D5E6F7A8B9C0D1 /* WidgetUpdateService.swift in Sources */,
+				F7A8B9C0D1E2F3A4B5C6D7E8 /* FrequencyGenerator.swift in Sources */,
+				F8A9B0C1D2E3F4A5B6C7D8E9F0 /* FrequencyPresetService.swift in Sources */,
+				C9D0E1F2A3B4C5D6E7F8A9 /* SimpleLoadingView.swift in Sources */,
+				F5A6B7C8D9E0F1A2B3C4D5E6 /* OpenAmbiShortcuts.swift in Sources */,
+				A7B8C9D0E1F2A3B4C5D6E7F8 /* AuthManager.swift in Sources */,
+				B9C0D1E2F3A4B5C6D7E8F9A0 /* AuthenticationView.swift in Sources */,
+				953F37C52EEDE10E007EA25C /* EditRecordingView.swift in Sources */,
+				C1D2E3F4A5B6C7D8E9F0A1 /* ProfileButton.swift in Sources */,
+				S1E2T3T4I5N6G7S8V9I0E1W2 /* SettingsView.swift in Sources */,
+				P1R2O3F4I5L6E7E8D9I0T1V2 /* ProfileEditView.swift in Sources */,
+				953F37B32EE3A793007EA25C /* RecordingManager.swift in Sources */,
+				S2E3T4I5N6G7S8V9I0E1W4 /* SettingsManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		95C633B02ED8644E0051DBA3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		95C633C92ED8644F0051DBA3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 95C633B32ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension */;
+			targetProxy = 95C633C82ED8644F0051DBA3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */ = {
@@ -153,11 +421,42 @@
 		1C2132A05B59913E0F20CE51 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LVH8Z2THG7;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				MARKETING_VERSION = 1.0;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.openambistudio;
 				PRODUCT_NAME = "openambi-studio";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -165,24 +464,63 @@
 		246136642BA0EE751EDE9D8D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=*]" = AppIcon;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_ENTITLEMENTS = "openambi-studio/openambi-studio.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "openambi-studio";
+				INFOPLIST_FILE = "openambi-studio/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = openambi;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.fourthquarterstudio.openambi;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
 			name = Debug;
 		};
 		4676AC221524D15203675BB1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LVH8Z2THG7;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.openambistudio;
 				PRODUCT_NAME = "openambi-studio";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -190,13 +528,181 @@
 		6277BDC2B749A16D4D4B59F3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=*]" = AppIcon;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_ENTITLEMENTS = "openambi-studio/openambi-studio.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "openambi-studio";
+				INFOPLIST_FILE = "openambi-studio/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = openambi;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.fourthquarterstudio.openambi;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+			};
+			name = Release;
+		};
+		95C633CC2ED8644F0051DBA3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenAmbiWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenAmbiWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = co.fourthquarterstudio.openambi.OpenAmbiWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		95C633CD2ED8644F0051DBA3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenAmbiWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenAmbiWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = co.fourthquarterstudio.openambi.OpenAmbiWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -208,6 +714,15 @@
 			buildConfigurations = (
 				1C2132A05B59913E0F20CE51 /* Debug */,
 				4676AC221524D15203675BB1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		95C633CF2ED8644F0051DBA3 /* Build configuration list for PBXNativeTarget "OpenAmbiWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				95C633CC2ED8644F0051DBA3 /* Debug */,
+				95C633CD2ED8644F0051DBA3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

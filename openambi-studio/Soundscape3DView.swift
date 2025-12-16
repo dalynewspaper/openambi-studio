@@ -1,0 +1,3322 @@
+import SwiftUI
+import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
+
+// MARK: - Main 3D Soundscape View with Pull-to-Activate UX
+struct Soundscape3DView: View {
+    @EnvironmentObject var audioManager: AudioManager
+    @EnvironmentObject var authManager: AuthManager
+    @StateObject private var supabaseService = SupabaseService()
+    @Binding var selectedTab: Int // Binding to navigate to recording tab
+    @State private var orbPositions: [UUID: CGPoint] = [:]
+    @State private var draggingTrackId: UUID? = nil
+    @State private var dragOffset: CGSize = .zero
+    @State private var isLoading = true
+    @State private var soundsInVolumeMode: Set<UUID> = [] // Track which sounds are in volume mode
+    @State private var selectedTrackForModal: AudioTrack? = nil // Track selected for modal from grid
+    @State private var isDraggingToDock: Set<UUID> = [] // Track which items are being dragged to dock
+    @State private var dockFrame: CGRect = .zero // Track dock frame for drop detection
+    @State private var gridItemPositions: [UUID: CGPoint] = [:] // Track grid item positions for drag-to-dock
+    @State private var uiMaterialized = false // Track if UI has materialized from cinematic
+    @State private var hasLoadedData = false // Track if data has been loaded to prevent reloading
+    
+    // Constants
+    private let dockHeight: CGFloat = 0.1 // Bottom 10% is dock
+    private let minActiveHeight: CGFloat = 0.12 // 12% from bottom = minimum active
+    private let maxVolumeHeight: CGFloat = 0.9 // 90% from bottom = max volume
+    
+    // Helper to calculate dock width matching 3 grid tiles
+    private func calculateDockWidth() -> CGFloat {
+        let tileSize: CGFloat = 110 // baseSize from GridSoundItem
+        let columnSpacing: CGFloat = AppSpacing.md // 24pt - matches grid column spacing
+        return (tileSize * 3) + (columnSpacing * 2) // 330 + 48 = 378pt
+    }
+    
+    // Active tracks for background animations (only tracks with volume > 0)
+    private var activeTracksForBackground: [AudioTrack] {
+        audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+    }
+    
+    // Active tracks for dock (all active tracks, regardless of volume) - sorted by volume (loudest first)
+    private var activeTracks: [AudioTrack] {
+        audioManager.tracks.filter { $0.isActive }
+            .sorted { $0.volume > $1.volume } // Sort by volume descending (loudest first)
+    }
+    
+    // Grid tracks: maintain original order (no sorting by volume)
+    // Tiles should stay in their fixed positions
+    private var sortedTracks: [AudioTrack] {
+        // Return tracks in their original order - no sorting
+        return audioManager.tracks
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let safeAreaInsets = geometry.safeAreaInsets
+            let topSafeArea = safeAreaInsets.top
+            let bottomSafeArea = safeAreaInsets.bottom
+            // Enhanced safe area handling with additional padding for premium feel
+            let effectiveTopSafeArea = topSafeArea + AppSpacing.safeAreaTopPadding
+            let effectiveBottomSafeArea = bottomSafeArea + AppSpacing.safeAreaBottomPadding
+            
+            ZStack {
+                // Base background color - always visible, matches app theme
+                AppTheme.background
+                    .ignoresSafeArea(.all)
+                
+                // Immersive background - extends into safe areas, overlays base
+                ImmersiveBackground(activeTracks: activeTracksForBackground)
+                    .ignoresSafeArea(.all)
+                    .opacity(uiMaterialized ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.4).delay(0.1), value: uiMaterialized)
+                
+                // Always calculate approximate dock frame for drop detection (even when dock is empty)
+                // This allows dragging first track to dock
+                Color.clear
+                    .onAppear {
+                        // Calculate approximate dock position at bottom of screen
+                        let approximateDockHeight: CGFloat = 100
+                        let volumeSliderHeight: CGFloat = 40
+                        let dockY = geometry.size.height - bottomSafeArea - approximateDockHeight - volumeSliderHeight
+                        let calculatedFrame = CGRect(
+                            x: 0,
+                            y: dockY,
+                            width: geometry.size.width,
+                            height: approximateDockHeight
+                        )
+                        dockFrame = calculatedFrame
+                        print("📍 Calculated dock frame (onAppear): \(calculatedFrame)")
+                    }
+                    .onChange(of: geometry.size) { _, newSize in
+                        // Recalculate when screen size changes
+                        let approximateDockHeight: CGFloat = 100
+                        let volumeSliderHeight: CGFloat = activeTracks.isEmpty ? 0 : 40
+                        let dockY = newSize.height - bottomSafeArea - approximateDockHeight - volumeSliderHeight
+                        let calculatedFrame = CGRect(
+                            x: 0,
+                            y: dockY,
+                            width: newSize.width,
+                            height: approximateDockHeight
+                        )
+                        dockFrame = calculatedFrame
+                        print("📍 Calculated dock frame (size change): \(calculatedFrame)")
+                    }
+                
+                // Master Volume Slider - positioned at top between safe area and sound icons
+                if !activeTracks.isEmpty && selectedTrackForModal == nil {
+                    VStack {
+                        Spacer()
+                            .frame(height: effectiveTopSafeArea + AppSpacing.md + AppSpacing.md) // Position in middle of safe area and icons (48px down)
+                        
+                        MasterVolumeSlider(audioManager: audioManager)
+                            .padding(.horizontal, AppSpacing.edgePadding)
+                            .zIndex(102) // Above everything
+                            .allowsHitTesting(true) // Ensure it can receive touches
+                            .opacity(uiMaterialized ? 1.0 : 0.0)
+                            .offset(y: uiMaterialized ? 0 : 10)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: uiMaterialized)
+                        
+                        Spacer()
+                    }
+                    .zIndex(102) // Above grid
+                }
+                
+                // Grid layout for all sound elements (active tracks first) - hide when modal is open
+                if selectedTrackForModal == nil {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            // Top spacing - drop icons down for better visual balance
+                            // Add 48px total margin (24px + 24px) to push elements into the app
+                            Spacer()
+                                .frame(height: effectiveTopSafeArea + AppSpacing.xl + AppSpacing.md + AppSpacing.md)
+                            
+                            // Sound elements grid - iOS home screen style spacing
+                            LazyVGrid(
+                                columns: [
+                                    GridItem(.flexible(), spacing: AppSpacing.md), // Generous spacing between columns (iOS style)
+                                    GridItem(.flexible(), spacing: AppSpacing.md),
+                                    GridItem(.flexible(), spacing: AppSpacing.md),
+                                    GridItem(.flexible(), spacing: 0) // No trailing spacing to prevent cutoff
+                                ],
+                                spacing: AppSpacing.lg // Generous row spacing (iOS home screen style)
+                            ) {
+                                ForEach(sortedTracks, id: \.id) { track in
+                                    GridSoundItem(
+                                        track: Binding(
+                                            get: { track },
+                                            set: { newValue in
+                                                if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                                                    audioManager.tracks[index] = newValue
+                                                }
+                                            }
+                                        ),
+                                        audioManager: audioManager,
+                                        soundsInVolumeMode: $soundsInVolumeMode,
+                                        isDraggingToDock: $isDraggingToDock,
+                                        dockFrame: dockFrame,
+                                        itemPosition: gridItemPositions[track.id] ?? .zero,
+                                        onLongPress: {
+                                            // Activate track and open modal
+                                            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                                                var updatedTrack = audioManager.tracks[index]
+                                                if !updatedTrack.isActive || updatedTrack.volume == 0 {
+                                                    updatedTrack.isActive = true
+                                                    updatedTrack.volume = 0.5 // Set default volume
+                                                    audioManager.tracks[index] = updatedTrack
+                                                    audioManager.toggleTrack(track.id, isActive: true)
+                                                    audioManager.updateTrackVolume(track.id, volume: 0.5)
+                                                }
+                                            }
+                                            // Open modal
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                selectedTrackForModal = track
+                                            }
+                                        }
+                                    )
+                                    .opacity(uiMaterialized ? 1.0 : 0.0)
+                                    .offset(y: uiMaterialized ? 0 : 20)
+                                    .transition(.asymmetric(
+                                        insertion: .scale.combined(with: .opacity),
+                                        removal: .opacity
+                                    ))
+                                    .animation(
+                                        .spring(response: 0.5, dampingFraction: 0.8)
+                                        .delay(Double(sortedTracks.firstIndex(where: { $0.id == track.id }) ?? 0) * 0.03),
+                                        value: uiMaterialized
+                                    )
+                                }
+                            }
+                            .padding(EdgeInsets(
+                                top: 0, // No top padding since we have spacer
+                                leading: AppSpacing.lg, // Generous edge padding (iOS style)
+                                bottom: AppSpacing.xxl + effectiveBottomSafeArea + AppSpacing.md, // Bottom padding with safe area + 24px margin
+                                trailing: AppSpacing.lg // Generous edge padding (iOS style)
+                            ))
+                            .frame(maxWidth: .infinity) // Ensure grid doesn't overflow
+                            .zIndex(0) // Grid below dock
+                        }
+                    .background(
+                        GeometryReader { scrollGeometry in
+                            Color.clear
+                                .preference(key: ScrollOffsetPreferenceKey.self, 
+                                          value: scrollGeometry.frame(in: .named("scroll")).minY)
+                        }
+                    )
+                }
+                .coordinateSpace(name: "scroll")
+                .scrollDisabled(!soundsInVolumeMode.isEmpty || !isDraggingToDock.isEmpty) // Disable scrolling when dragging or in volume mode
+                .zIndex(0) // Grid below dock
+                .onPreferenceChange(GridItemPositionPreferenceKey.self) { positions in
+                    gridItemPositions = positions
+                }
+                }
+                
+                // Dock - always shown at bottom when there are active tracks - hide when modal is open
+                if !activeTracks.isEmpty && selectedTrackForModal == nil {
+                    VStack(spacing: 0) {
+                        Spacer()
+                        
+                        // Dock at bottom - full width, matches iOS system dock
+                        ActiveMixDock(
+                            activeTracks: activeTracks,
+                            audioManager: audioManager,
+                            soundsInVolumeMode: $soundsInVolumeMode,
+                            selectedTrackForModal: $selectedTrackForModal,
+                            screenHeight: geometry.size.height,
+                            bottomSafeArea: bottomSafeArea,
+                            dockWidth: nil, // Full width
+                            onDockFrameChange: { frame in
+                                // Only update if frame is valid (non-zero)
+                                if frame.width > 0 && frame.height > 0 {
+                                    dockFrame = frame
+                                    print("📍 Dock frame updated: \(frame)")
+                                }
+                            }
+                        )
+                        .zIndex(101) // Dock above background
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .opacity(uiMaterialized ? 1.0 : 0.0)
+                        .offset(y: uiMaterialized ? 0 : 20)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: uiMaterialized)
+                        .padding(.bottom, AppSpacing.md) // Add 24px margin to push dock up into the app
+                    }
+                    .zIndex(100) // Entire dock container above grid
+                }
+                
+                // Modal overlay - shown when track is selected from grid
+                if let track = selectedTrackForModal {
+                    SoundControlModal(
+                        track: track,
+                        audioManager: audioManager,
+                        topSafeArea: effectiveTopSafeArea,
+                        onDismiss: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                selectedTrackForModal = nil
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+        }
+        .task {
+            // Load data asynchronously - only once to prevent resetting tracks
+            if !hasLoadedData {
+                await loadData()
+                hasLoadedData = true
+            }
+            
+            // Trigger UI materialization animation after a brief delay
+            // This creates smooth staggered reveal when transitioning from cinematic
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation {
+                    uiMaterialized = true
+                }
+            }
+        }
+        .onDisappear {
+            // Clean up
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RecordingSaved"))) { notification in
+            // Refresh user recordings when a new one is saved
+            // With RLS fix, recordings appear immediately, so just a simple refresh is needed
+            print("🔄 Soundscape3DView: Received RecordingSaved notification - refreshing user recordings")
+            
+            Task {
+                guard let user = authManager.currentUser else { return }
+                
+                // Small delay to ensure the recording is added to AudioManager first
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                
+                do {
+                    guard let accessToken = await authManager.getAccessToken() else { return }
+                    
+                    // Fetch all user recordings (RLS now works correctly)
+                    let userRecordings = try await supabaseService.fetchUserRecordings(
+                        accessToken: accessToken,
+                        userId: user.id
+                    )
+                    
+                    print("✅ Soundscape3DView: Fetched \(userRecordings.count) user recordings")
+                    
+                    // Merge with existing tracks (keep ambient sounds and frequency tracks)
+                    await MainActor.run {
+                        let existingTracks = audioManager.tracks.filter { !$0.isUserRecording }
+                        let allTracks = existingTracks + userRecordings
+                        audioManager.loadTracks(allTracks)
+                        print("✅ Soundscape3DView: Updated AudioManager with \(allTracks.count) total tracks (\(userRecordings.count) user recordings)")
+                    }
+                } catch {
+                    print("⚠️ Soundscape3DView: Failed to refresh recordings: \(error)")
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func isAboveDock(_ track: AudioTrack, in size: CGSize) -> Bool {
+        // Show orb if it's positioned above the dock area
+        // Check if track has a stored position above dock
+        if let storedPosition = orbPositions[track.id] {
+            let dockTop = size.height * (1 - dockHeight)
+            return storedPosition.y < dockTop - 20 // 20pt buffer above dock
+        }
+        // If no stored position, check if track is active (should be above dock)
+        return track.isActive && track.volume > 0
+    }
+    
+    private func getOrbPosition(for track: AudioTrack, in size: CGSize) -> CGPoint {
+        if let storedPosition = orbPositions[track.id] {
+            // Apply collision avoidance for active orbs
+            return avoidOverlap(position: storedPosition, for: track.id, in: size)
+        }
+        // Default to dock position
+        return getDockPosition(for: track, in: size)
+    }
+    
+    private func avoidOverlap(position: CGPoint, for trackId: UUID, in size: CGSize) -> CGPoint {
+        let minDistance = AppSpacing.orbMinDistance // Minimum distance between orbs
+        var adjustedPosition = position
+        
+        // Only apply collision avoidance if orb is above dock
+        let dockTop = size.height * (1 - dockHeight)
+        guard position.y < dockTop else {
+            return position // In dock, no collision avoidance needed
+        }
+        
+        // Check against all other active orbs
+        for (otherId, otherPosition) in orbPositions where otherId != trackId {
+            let otherDockTop = size.height * (1 - dockHeight)
+            guard otherPosition.y < otherDockTop else { continue } // Skip orbs in dock
+            
+            let distance = sqrt(
+                pow(adjustedPosition.x - otherPosition.x, 2) +
+                pow(adjustedPosition.y - otherPosition.y, 2)
+            )
+            
+            if distance < minDistance {
+                // Push away from overlapping orb
+                let angle = atan2(
+                    adjustedPosition.y - otherPosition.y,
+                    adjustedPosition.x - otherPosition.x
+                )
+                let pushDistance = (minDistance - distance) * 0.6 // Gentle push
+                adjustedPosition.x += cos(angle) * pushDistance
+                adjustedPosition.y += sin(angle) * pushDistance
+                
+                // Keep within bounds (avoid hub and dock)
+                adjustedPosition.x = max(80, min(size.width - 80, adjustedPosition.x))
+                adjustedPosition.y = max(size.height * 0.3, min(size.height * 0.85, adjustedPosition.y))
+            }
+        }
+        
+        return adjustedPosition
+    }
+    
+    private func getDockPosition(for track: AudioTrack, in size: CGSize) -> CGPoint {
+        let dockY = size.height * (1 - dockHeight / 2)
+        if let trackIndex = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+            // Calculate position in horizontal scroll using spacing system
+            let itemWidth: CGFloat = 56 + AppSpacing.dockItemSpacing // Item size + spacing
+            let x = AppSpacing.dockPadding + (itemWidth * CGFloat(trackIndex)) + 28 // Padding + item center
+            return CGPoint(x: x, y: dockY)
+        }
+        return CGPoint(x: size.width / 2, y: dockY)
+    }
+    
+    private func initializeDockPositions() {
+        // Initialize all tracks to dock positions
+        // This will be done when geometry is available
+    }
+    
+    private func handleDockDrag(trackId: UUID, location: CGPoint, in size: CGSize) {
+        draggingTrackId = trackId
+        updateOrbFromPosition(trackId: trackId, position: location, in: size)
+    }
+    
+    private func updateOrbFromPosition(trackId: UUID, position: CGPoint, in size: CGSize) {
+        // Improved volume calculation with clear zones
+        let dockTop = size.height * (1 - dockHeight) // Bottom 10% is dock
+        let hubBottom = size.height * 0.15 // Top 15% is hub area
+        let activeZoneStart = dockTop // Start of active zone
+        let activeZoneEnd = hubBottom // End of active zone
+        let activeZoneHeight = activeZoneEnd - activeZoneStart
+        
+        var volume: Double = 0.0
+        var isActive = false
+        
+        // Check if position is in dock (bottom 10%)
+        if position.y >= dockTop {
+            // In dock - deactivate
+            volume = 0.0
+            isActive = false
+        } else if position.y < activeZoneEnd {
+            // In active zone - calculate volume based on height
+            // Higher = louder (closer to hub = louder)
+            let distanceFromDock = dockTop - position.y
+            if activeZoneHeight > 0 {
+                volume = Double(distanceFromDock / activeZoneHeight)
+                volume = clamp(volume, min: 0.0, max: 1.0)
+            } else {
+                volume = 1.0 // If zones overlap, default to max
+            }
+            
+            // Activation threshold: must be at least 2% volume to activate
+            isActive = volume > 0.02
+            
+            // Enhanced haptic feedback at volume milestones (25%, 50%, 75%, 100%)
+            let currentMilestone = Int(volume * 4) // 0, 1, 2, 3, 4
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == trackId }) {
+                let previousVolume = audioManager.tracks[index].volume
+                let previousMilestone = Int(previousVolume * 4)
+                
+                // Only trigger haptic when crossing milestone upward
+                if currentMilestone > previousMilestone && currentMilestone > 0 {
+                    // Progressive haptic intensity
+                    let style: UIImpactFeedbackGenerator.FeedbackStyle = currentMilestone >= 3 ? .medium : .light
+                    let impact = UIImpactFeedbackGenerator(style: style)
+                    impact.prepare()
+                    impact.impactOccurred()
+                }
+            }
+        } else {
+            // Above active zone (in hub area) - max volume
+            volume = 1.0
+            isActive = true
+        }
+        
+        // Update track
+        if let index = audioManager.tracks.firstIndex(where: { $0.id == trackId }) {
+            var updatedTrack = audioManager.tracks[index]
+            let wasActive = updatedTrack.isActive
+            
+            updatedTrack.volume = volume
+            updatedTrack.isActive = isActive
+            audioManager.tracks[index] = updatedTrack
+            
+            // Update audio volume (always update for smooth transitions)
+            audioManager.updateTrackVolume(trackId, volume: volume)
+            
+            // Handle state changes
+            if isActive && !wasActive {
+                // Track was activated (dragged up from dock)
+                print("🎵 Activating track: \(updatedTrack.name) at volume: \(Int(volume * 100))%")
+                
+                // Ensure audio manager is playing
+                if !audioManager.isPlaying {
+                    audioManager.isPlaying = true
+                }
+                
+                // Ensure volume is at least 1% to trigger playback
+                if volume < 0.01 {
+                    updatedTrack.volume = 0.01
+                    audioManager.tracks[index] = updatedTrack
+                }
+                
+                // Start the track immediately
+                audioManager.toggleTrack(trackId, isActive: true)
+            } else if !isActive && wasActive {
+                // Track was deactivated (dragged back to dock)
+                print("⏸️ Deactivating track: \(updatedTrack.name)")
+                audioManager.toggleTrack(trackId, isActive: false)
+            }
+            // If track is already active, volume update is handled above
+            
+            // Store position
+            orbPositions[trackId] = position
+        }
+    }
+    
+    private func snapToDockIfNeeded(trackId: UUID, in size: CGSize) {
+        guard let position = orbPositions[trackId] else { return }
+        let dockTop = size.height * (1 - dockHeight)
+        
+        // If very close to dock, snap to it
+        if position.y > dockTop - 20 {
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == trackId }) {
+                // Use explicit transaction to avoid animation conflicts
+                let transaction = Transaction(animation: .spring(response: 0.3, dampingFraction: 0.7))
+                withTransaction(transaction) {
+                    // Remove from soundscape positions (will appear in dock)
+                    orbPositions.removeValue(forKey: trackId)
+                    var updatedTrack = audioManager.tracks[index]
+                    updatedTrack.volume = 0.0
+                    updatedTrack.isActive = false
+                    audioManager.tracks[index] = updatedTrack
+                }
+                
+                // Update audio outside of animation transaction
+                audioManager.updateTrackVolume(trackId, volume: 0.0)
+                audioManager.toggleTrack(trackId, isActive: false)
+            }
+        }
+    }
+    
+    private func loadData() async {
+        isLoading = true
+        do {
+            let fetchedTracks = try await supabaseService.fetchAudioTracks()
+            
+            // Add frequency tracks
+            let frequencyTracks = FrequencyPresetService.shared.createFrequencyTracks()
+            
+            // Load user recordings if authenticated
+            var userRecordings: [AudioTrack] = []
+            if let user = authManager.currentUser {
+                do {
+                    if let accessToken = await authManager.getAccessToken() {
+                        userRecordings = try await supabaseService.fetchUserRecordings(
+                            accessToken: accessToken,
+                            userId: user.id
+                        )
+                        print("✅ Loaded \(userRecordings.count) user recordings")
+                    }
+                } catch {
+                    print("⚠️ Failed to load user recordings: \(error)")
+                }
+            }
+            
+            let allTracks = fetchedTracks + frequencyTracks + userRecordings
+            
+            await MainActor.run {
+                // Only load tracks from Supabase - no fallback to sample tracks
+                // If Supabase returns empty, show empty state
+                self.audioManager.loadTracks(allTracks)
+                print("✅ Loaded \(fetchedTracks.count) tracks from Supabase + \(frequencyTracks.count) frequency tracks + \(userRecordings.count) user recordings")
+                
+                self.isLoading = false
+            }
+            
+            // Determine which tracks need to play BEFORE loading
+            let tracksToPlay = determineTracksToPlay(from: allTracks)
+            
+            // Preload and start active tracks IMMEDIATELY (non-blocking)
+            Task {
+                await self.preloadAndStartActiveTracks(tracksToPlay, from: allTracks)
+            }
+            
+            // Start preloading ALL file-based tracks in background for instant response
+            // Frequency tracks don't need preloading - they generate in real-time
+            // Capture audioManager directly since Soundscape3DView is a struct
+            let audioManager = self.audioManager
+            Task.detached(priority: .userInitiated) {
+                for track in fetchedTracks {
+                    // Preload all file-based tracks (non-blocking) - they'll be ready when user taps
+                    await MainActor.run {
+                        audioManager.preloadTrack(track)
+                    }
+                }
+                print("✅ Started preloading all \(fetchedTracks.count) file-based tracks in background")
+            }
+            
+            // Now restore the full mix state (this will handle any additional tracks)
+            await MainActor.run {
+                self.restoreLastActiveMix(from: allTracks)
+            }
+        } catch {
+            print("⚠️ Failed to load data from Supabase: \(error)")
+            // Don't use fallback - only show tracks from Supabase
+            await MainActor.run {
+                self.audioManager.loadTracks([]) // Empty array - no tracks if Supabase fails
+                self.isLoading = false
+            }
+        }
+    }
+    
+    // Determine which tracks should play on startup
+    // Only reset to Rain if no tracks are currently active (first launch)
+    private func determineTracksToPlay(from allTracks: [AudioTrack]) -> [AudioTrack] {
+        // Check if there are any active tracks already playing
+        let currentlyActiveTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+        
+        // If tracks are already active, don't reset - preserve current state
+        if !currentlyActiveTracks.isEmpty {
+            return [] // Don't reset, keep current tracks
+        }
+        
+        // Only on first launch (no active tracks), use Rain at 50% volume
+        if let rainTrack = allTracks.first(where: { $0.name.lowercased().contains("rain") }) {
+            var track = rainTrack
+            track.isActive = true
+            track.volume = 0.5
+            return [track]
+        }
+        
+        return []
+    }
+    
+    // Preload and start active tracks immediately
+    private func preloadAndStartActiveTracks(_ tracksToPlay: [AudioTrack], from allTracks: [AudioTrack]) async {
+        guard !tracksToPlay.isEmpty else { return }
+        
+        // Preload active tracks first and wait for them to be ready
+        for track in tracksToPlay {
+            // Preload this track immediately
+            await audioManager.preloadTrackImmediately(track)
+            
+            // Update track state
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                await MainActor.run {
+                    self.audioManager.tracks[index].isActive = track.isActive
+                    self.audioManager.tracks[index].volume = track.volume
+                }
+            }
+            
+            // Start playback immediately (don't wait)
+            await MainActor.run {
+                if let player = self.audioManager.audioPlayers[track.id] {
+                    let targetVolume = Float(track.volume * self.audioManager.masterVolume)
+                    player.volume = targetVolume
+                    // Use playImmediately for instant start
+                    if player.status == .readyToPlay || player.status == .unknown {
+                        player.playImmediately(atRate: 1.0)
+                    } else {
+                        player.play() // Will start when buffer is ready
+                    }
+                    print("▶️ Started \(track.name) immediately, volume: \(targetVolume)")
+                }
+            }
+        }
+        
+        // Start audio session playback
+        await MainActor.run {
+            self.audioManager.play()
+            print("🎵 Started \(tracksToPlay.count) active track(s) immediately")
+        }
+        
+        // Lazy load remaining inactive tracks - only preload smart subset
+        Task {
+            let activeTrackIds = Set(tracksToPlay.map { $0.id })
+            let inactiveTracks = allTracks.filter { !activeTrackIds.contains($0.id) }
+            
+            // Use lazy loader to determine which tracks to preload
+            let tracksToPreload = LazyTrackLoader.shared.getTracksToPreload(
+                activeTracks: tracksToPlay,
+                allTracks: allTracks
+            )
+            let tracksToPreloadURLs = tracksToPreload
+                .filter { !activeTrackIds.contains($0.id) }
+                .map { $0.audioUrl }
+            
+            // Preload smart subset in background with low priority
+            await AudioCacheService.shared.preloadTracks(tracksToPreloadURLs, priority: .low)
+            
+            // Only set up players for tracks that will likely be used
+            for track in tracksToPreload.filter({ !activeTrackIds.contains($0.id) }) {
+                await MainActor.run {
+                    self.audioManager.preloadTrack(track)
+                    LazyTrackLoader.shared.markTrackLoaded(track.id)
+                }
+            }
+        }
+    }
+    
+    // MARK: - State Persistence
+    
+    private func saveCurrentMix() {
+        // Save current active tracks
+        let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+        StatePersistenceService.shared.saveLastActiveMix(activeTracks)
+    }
+    
+    private func restoreLastActiveMix(from allTracks: [AudioTrack]) {
+        // Check if there are already active tracks - if so, don't reset
+        let currentlyActiveTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+        if !currentlyActiveTracks.isEmpty {
+            // Tracks are already active, preserve them
+            return
+        }
+        
+        // Only restore Rain if no tracks are active (first launch)
+        if let rainTrack = allTracks.first(where: { $0.name.lowercased().contains("rain") }) {
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == rainTrack.id }) {
+                audioManager.tracks[index].isActive = true
+                audioManager.tracks[index].volume = 0.5
+                
+                // Ensure player exists and is ready
+                if let player = audioManager.audioPlayers[rainTrack.id] {
+                    // Player exists, activate it
+                    audioManager.toggleTrack(rainTrack.id, isActive: true)
+                    audioManager.updateTrackVolume(rainTrack.id, volume: 0.5)
+                    
+                    // Force play and verify
+                    player.volume = Float(0.5 * audioManager.masterVolume)
+                    if player.rate == 0 {
+                        player.play()
+                    }
+                    
+                    // Verify playback after delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        if player.rate == 0 {
+                            print("⚠️ Rain not playing, forcing play...")
+                            player.play()
+                        } else {
+                            print("✅ Rain confirmed playing: rate=\(player.rate), volume=\(player.volume)")
+                        }
+                    }
+                } else {
+                    // Player not ready yet, use toggleTrack which will wait
+                    audioManager.toggleTrack(rainTrack.id, isActive: true)
+                    audioManager.updateTrackVolume(rainTrack.id, volume: 0.5)
+                    
+                    // Wait for player and verify
+                    Task {
+                        var attempts = 0
+                        while audioManager.audioPlayers[rainTrack.id] == nil && attempts < 20 {
+                            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                            attempts += 1
+                        }
+                        
+                        if let player = audioManager.audioPlayers[rainTrack.id] {
+                            await MainActor.run {
+                                player.volume = Float(0.5 * audioManager.masterVolume)
+                                if player.rate == 0 {
+                                    player.play()
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                audioManager.play()
+                print("🌧️ Activated Rain at 50% volume (always single track on launch)")
+                
+                // Mark as launched if first time
+                if StatePersistenceService.shared.isFirstLaunch() {
+                    StatePersistenceService.shared.markLaunched()
+                }
+            } else {
+                print("⚠️ Rain track not found in audioManager.tracks")
+            }
+        } else {
+            print("⚠️ Rain track not found in allTracks")
+        }
+    }
+}
+
+// MARK: - Pullable Sound Orb
+struct PullableSoundOrb: View {
+    @Binding var track: AudioTrack
+    let audioManager: AudioManager
+    let position: CGPoint
+    let onDragStart: () -> Void
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnd: () -> Void
+    
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var dragOffset: CGSize = .zero
+    
+    var trackColor: Color {
+        SoundColor.colorForTrack(track.name)
+    }
+    
+    var orbSize: CGFloat {
+        // Size scales with volume: 60-120 points
+        60 + CGFloat(track.volume) * 60
+    }
+    
+    var body: some View {
+        ZStack {
+            // Outer glow
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: track.isActive ? [
+                            trackColor.opacity(0.6 * track.volume),
+                            trackColor.opacity(0.2 * track.volume),
+                            Color.clear
+                        ] : [
+                            Color.white.opacity(0.1),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 100
+                    )
+                )
+                .frame(width: 200, height: 200)
+                .blur(radius: 20)
+                .scaleEffect(track.isActive ? pulseScale : 1.0)
+            
+            // Main orb
+            ZStack {
+                // Waveform rings (when active) - behind the orb
+                if track.isActive && track.volume > 0.1 {
+                    WaveformRings(color: trackColor, intensity: track.volume)
+                        .offset(x: dragOffset.width, y: dragOffset.height)
+                }
+                
+                // Glass orb - ensure perfect circle
+                Circle()
+                    .fill(
+                        .ultraThinMaterial
+                            .shadow(.inner(color: trackColor.opacity(0.2), radius: 5))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: track.isActive ? [
+                                        trackColor,
+                                        trackColor.opacity(0.6),
+                                        trackColor.opacity(0.3)
+                                    ] : [
+                                        Color.white.opacity(0.3),
+                                        Color.white.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: track.isActive ? 3.5 : 1.5
+                            )
+                    )
+                    .frame(width: orbSize, height: orbSize)
+                    .aspectRatio(1.0, contentMode: .fit) // Force 1:1 aspect ratio
+                    .clipShape(Circle()) // Ensure perfect circle
+                    .shadow(
+                        color: trackColor.opacity(track.isActive ? 0.6 : 0.2),
+                        radius: track.isActive ? 25 : 10,
+                        x: 0,
+                        y: track.isActive ? 15 : 5
+                    )
+                    .offset(x: dragOffset.width, y: dragOffset.height)
+                
+                // Icon with enhanced gradient
+                Image(systemName: track.icon)
+                    .font(.system(size: orbSize * 0.4, weight: .semibold, design: .rounded))
+                    .foregroundStyle(
+                        SoundColor.gradientForTrack(track.name)
+                    )
+                    .opacity(track.isActive ? 1.0 : 0.6)
+                    .offset(x: dragOffset.width, y: dragOffset.height)
+            }
+            
+            // Volume indicator with new typography
+            if track.isActive && track.volume > 0.05 {
+                VStack(spacing: AppSpacing.xs) {
+                    AppTypography.volume(Int(track.volume * 100))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, AppSpacing.sm)
+                        .background {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .opacity(0.9)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    trackColor.opacity(0.6),
+                                                    trackColor.opacity(0.3)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            ),
+                                            lineWidth: 1.5
+                                        )
+                                )
+                        }
+                        .shadow(color: trackColor.opacity(0.4), radius: 8, x: 0, y: 4)
+                        .shadow(color: trackColor.opacity(0.2), radius: 16, x: 0, y: 8)
+                }
+                .offset(y: orbSize / 2 + AppSpacing.lg)
+                .offset(x: dragOffset.width, y: dragOffset.height)
+                    .offset(y: orbSize / 2 + 20)
+                    .offset(x: dragOffset.width, y: dragOffset.height)
+            }
+        }
+        .drawingGroup() // Render as a single layer to prevent animation conflicts
+        .gesture(
+            DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    onDragStart()
+                    // Update offset directly (no animation)
+                    dragOffset = value.translation
+                    // Update position directly without animation
+                    let newPosition = CGPoint(
+                        x: position.x + value.translation.width,
+                        y: position.y + value.translation.height
+                    )
+                    onDragChanged(newPosition)
+                }
+                .onEnded { _ in
+                    dragOffset = .zero
+                    onDragEnd()
+                }
+        )
+        .onTapGesture {
+            // Enhanced tap feedback
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.prepare()
+            impact.impactOccurred()
+            
+            // Visual feedback with scale animation
+            withAnimation(AppTheme.Animation.quick) {
+                // Brief scale pulse
+            }
+            
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                var updatedTrack = audioManager.tracks[index]
+                if updatedTrack.volume > 0 {
+                    updatedTrack.volume = 0.0
+                    updatedTrack.isActive = false
+                } else {
+                    updatedTrack.volume = 0.5
+                    updatedTrack.isActive = true
+                }
+                audioManager.tracks[index] = updatedTrack
+                audioManager.updateTrackVolume(track.id, volume: updatedTrack.volume)
+                
+                // Only toggle if active state changed
+                if updatedTrack.isActive != track.isActive {
+                    audioManager.toggleTrack(track.id, isActive: updatedTrack.isActive)
+                }
+            }
+        }
+        .onAppear {
+            if track.isActive {
+                // Physics-based spring animation
+                withAnimation(AppTheme.Animation.spring.repeatForever(autoreverses: true)) {
+                    pulseScale = 1.15
+                }
+            }
+        }
+        .onChange(of: track.isActive) { _, isActive in
+            if isActive {
+                // Smooth spring animation when activating
+                withAnimation(AppTheme.Animation.spring.repeatForever(autoreverses: true)) {
+                    pulseScale = 1.15
+                }
+            } else {
+                // Quick return to normal
+                withAnimation(AppTheme.Animation.quick) {
+                    pulseScale = 1.0
+                }
+            }
+        }
+        .onChange(of: track.volume) { _, newVolume in
+            // Scale pulse intensity based on volume
+            let targetScale = 1.0 + (0.15 * newVolume)
+            withAnimation(AppTheme.Animation.smooth) {
+                pulseScale = targetScale
+            }
+        }
+    }
+}
+
+// MARK: - Sound Dock
+struct SoundDock: View {
+    let tracks: [AudioTrack]
+    let geometry: GeometryProxy
+    let onTrackDrag: (UUID, CGPoint) -> Void
+    let orbPositions: [UUID: CGPoint]
+    
+    private let dockHeight: CGFloat = 0.1
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            
+            // Dock content
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.dockItemSpacing) {
+                    // Only show tracks that are still in dock (filtered by parent)
+                    ForEach(tracks, id: \.id) { track in
+                        DockSoundItem(
+                            track: track,
+                            isActive: false, // Dock items are never "active" - they're just available
+                            onDrag: { location in
+                                onTrackDrag(track.id, location)
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, AppSpacing.dockPadding)
+                .padding(.vertical, AppSpacing.md)
+            }
+            .frame(height: geometry.size.height * dockHeight)
+            // iOS dock styling - matches system dock exactly
+            .background {
+                RoundedRectangle(cornerRadius: 48) // iOS dock corner radius - more rounded
+                    .fill(.ultraThinMaterial) // iOS dock material
+                    .opacity(0.85) // iOS dock opacity
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 48)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5) // Subtle border like iOS
+            )
+            .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: -5) // iOS dock shadow
+            .padding(.bottom, 8) // Position lower, closer to bottom edge
+        }
+    }
+    
+}
+
+// MARK: - Dock Sound Item
+struct DockSoundItem: View {
+    let track: AudioTrack
+    let isActive: Bool
+    let onDrag: (CGPoint) -> Void
+    
+    @State private var dragOffset: CGSize = .zero
+    @State private var startLocation: CGPoint = .zero
+    @State private var isPressed = false
+    
+    var trackColor: Color {
+        SoundColor.colorForTrack(track.name)
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Outer glow when active
+                if isActive {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    trackColor.opacity(0.4),
+                                    trackColor.opacity(0.1),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 20,
+                                endRadius: 40
+                            )
+                        )
+                        .frame(width: 70, height: 70)
+                        .blur(radius: 8)
+                }
+                
+                // Main dock item - ensure perfect circle
+                Circle()
+                    .fill(
+                        .ultraThinMaterial
+                            .shadow(.inner(color: trackColor.opacity(isActive ? 0.3 : 0.1), radius: 3))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: isActive ? [
+                                        trackColor,
+                                        trackColor.opacity(0.6)
+                                    ] : [
+                                        trackColor.opacity(0.4),
+                                        trackColor.opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: isActive ? 2.5 : 1.5
+                            )
+                    )
+                    .frame(width: 56, height: 56)
+                    .aspectRatio(1.0, contentMode: .fit) // Force 1:1 aspect ratio
+                    .clipShape(Circle()) // Ensure perfect circle
+                    .shadow(
+                        color: isActive ? trackColor.opacity(0.6) : Color.black.opacity(0.2),
+                        radius: isActive ? 12 : 4,
+                        x: 0,
+                        y: isActive ? 4 : 2
+                    )
+                    .scaleEffect(isPressed ? 0.95 : 1.0)
+                
+                // Icon with enhanced styling
+                Image(systemName: track.icon)
+                    .font(.system(size: 26, weight: isActive ? .semibold : .medium, design: .rounded))
+                    .foregroundStyle(
+                        isActive ? SoundColor.gradientForTrack(track.name) : LinearGradient(
+                            colors: [
+                                trackColor.opacity(0.8),
+                                trackColor.opacity(0.6)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .scaleEffect(isPressed ? 0.9 : 1.0)
+            }
+            .offset(x: dragOffset.width, y: dragOffset.height)
+            .animation(.none, value: dragOffset) // Explicitly disable animation
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 5)
+                    .onChanged { value in
+                        if dragOffset == .zero {
+                            isPressed = true
+                            startLocation = CGPoint(
+                                x: geometry.frame(in: .global).midX,
+                                y: geometry.frame(in: .global).midY
+                            )
+                        }
+                        // Update without animation
+                        var transaction = Transaction(animation: nil)
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            dragOffset = value.translation
+                        }
+                        let currentLocation = CGPoint(
+                            x: startLocation.x + value.translation.width,
+                            y: startLocation.y + value.translation.height
+                        )
+                        onDrag(currentLocation)
+                    }
+                    .onEnded { _ in
+                        isPressed = false
+                        // Reset without animation to avoid conflicts
+                        var transaction = Transaction(animation: nil)
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            dragOffset = .zero
+                        }
+                    }
+            )
+        }
+        .frame(width: 50, height: 50)
+    }
+}
+
+// MARK: - Waveform Rings
+// MARK: - Enhanced Audio-Reactive Waveform Rings
+struct WaveformRings: View {
+    let color: Color
+    let intensity: Double
+    @State private var ringScale: CGFloat = 1.0
+    @State private var ringPhase: CGFloat = 0.0
+    @State private var frequencyAmplitudes: [Double] = [0.5, 0.5, 0.5, 0.5] // Simulated frequency bands
+    @State private var frequencyTimer: Timer?
+    
+    var body: some View {
+        ZStack {
+            ForEach(0..<4, id: \.self) { index in
+                let baseOpacity = 0.7 - Double(index) * 0.15
+                let midOpacity = 0.4 - Double(index) * 0.1
+                let lowOpacity = 0.15 - Double(index) * 0.05
+                let gradientColors = [
+                    color.opacity(baseOpacity),
+                    color.opacity(midOpacity),
+                    color.opacity(lowOpacity),
+                    color.opacity(midOpacity),
+                    color.opacity(baseOpacity)
+                ]
+                
+                // Audio-reactive rotation (faster with higher intensity)
+                let startAngle = ringPhase + Double(index) * 45
+                let endAngle = startAngle + 360
+                
+                // Audio-reactive size (pulsing based on frequency amplitude)
+                let frequencyAmplitude = frequencyAmplitudes[index]
+                let ringSize = 140 + CGFloat(index) * 25
+                let reactiveScale = 1.0 + (frequencyAmplitude * 0.3)
+                let scaleFactor = (ringScale + CGFloat(index) * 0.15) * reactiveScale * (0.8 + CGFloat(intensity) * 0.2)
+                
+                // Audio-reactive opacity
+                let ringOpacity = (1.0 - Double(index) * 0.25) * intensity * (0.7 + frequencyAmplitude * 0.3)
+                let lineWidth = 2.5 - CGFloat(index) * 0.3 + CGFloat(frequencyAmplitude * 1.5)
+                
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: gradientColors,
+                            center: .center,
+                            startAngle: .degrees(startAngle),
+                            endAngle: .degrees(endAngle)
+                        ),
+                        lineWidth: lineWidth
+                    )
+                    .frame(width: ringSize, height: ringSize)
+                    .scaleEffect(scaleFactor)
+                    .opacity(ringOpacity)
+                    .compositingGroup()
+            }
+        }
+        .drawingGroup()
+        .onAppear {
+            // Continuous rotation with variable speed
+            withAnimation(.linear(duration: 3.0 / (1.0 + intensity * 0.5)).repeatForever(autoreverses: false)) {
+                ringPhase = 360
+            }
+            // Physics-based pulsing
+            withAnimation(AppTheme.Animation.spring.repeatForever(autoreverses: true)) {
+                ringScale = 1.3
+            }
+            // Simulate audio frequency analysis
+            startFrequencySimulation()
+        }
+        .onDisappear {
+            frequencyTimer?.invalidate()
+        }
+    }
+    
+    private func startFrequencySimulation() {
+        // 5x slower frequency updates for very relaxed animation
+        frequencyTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            // Simulate frequency bands reacting to audio
+            // In production, this would use real FFT analysis
+            for index in 0..<4 {
+                frequencyAmplitudes[index] = Double.random(in: 0.3...1.0) * intensity
+            }
+        }
+    }
+}
+
+// MARK: - Enhanced Particle System with Physics
+struct ParticleSystem: View {
+    let color: Color
+    let intensity: Double
+    let position: CGPoint
+    @State private var particles: [Particle] = []
+    @State private var animationTimer: Timer?
+    
+    // Physics constants
+    private let gravity: CGFloat = 0.15
+    private let velocityDecay: CGFloat = 0.98
+    private let minParticleSize: CGFloat = 2
+    private let maxParticleSize: CGFloat = 12
+    
+    var body: some View {
+        ZStack {
+            ForEach(particles, id: \.id) { particle in
+                // Enhanced particle with glow
+                ZStack {
+                    // Outer glow
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    color.opacity(particle.opacity * 0.8),
+                                    color.opacity(particle.opacity * 0.4),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: particle.size * 0.6
+                            )
+                        )
+                        .frame(width: particle.size * 1.5, height: particle.size * 1.5)
+                        .blur(radius: 2)
+                    
+                    // Main particle
+                    Circle()
+                        .fill(color.opacity(particle.opacity))
+                        .frame(width: particle.size, height: particle.size)
+                }
+                .position(particle.position)
+            }
+        }
+        .drawingGroup() // Performance optimization
+        .onAppear {
+            generateParticles()
+            startAnimation()
+        }
+        .onDisappear {
+            animationTimer?.invalidate()
+        }
+        .onChange(of: intensity) { _, newValue in
+            updateParticleCount(for: newValue)
+        }
+        .onChange(of: position) { _, _ in
+            updateParticlePositions()
+        }
+    }
+    
+    private func generateParticles() {
+        // Dynamic particle count based on intensity (20-50 particles)
+        let count = Swift.max(20, Int(intensity * 50))
+        particles = (0..<count).map { _ -> Particle in
+            // Random angle for radial emission
+            let angle = Double.random(in: 0...(2 * .pi))
+            let speed = CGFloat.random(in: 0.5...2.5) * (1.0 + CGFloat(intensity))
+            let distance = CGFloat.random(in: 0...80)
+            
+            return Particle(
+                position: CGPoint(
+                    x: position.x + cos(angle) * distance,
+                    y: position.y + sin(angle) * distance
+                ),
+                velocity: CGSize(
+                    width: cos(angle) * speed,
+                    height: sin(angle) * speed - CGFloat.random(in: 0...0.5) // Slight upward bias
+                ),
+                size: CGFloat.random(in: minParticleSize...maxParticleSize) * (0.8 + CGFloat(intensity) * 0.4),
+                opacity: Double.random(in: 0.5...0.95) * intensity
+            )
+        }
+    }
+    
+    private func startAnimation() {
+        // 5x slower, very relaxed particle animation
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
+            updateParticles()
+        }
+    }
+    
+    private func updateParticles() {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        
+        withTransaction(transaction) {
+            for index in particles.indices {
+                // Apply physics: gravity and velocity decay
+                particles[index].velocity.height += gravity
+                particles[index].velocity.width *= velocityDecay
+                particles[index].velocity.height *= velocityDecay
+                
+                // Update position
+                particles[index].position.x += particles[index].velocity.width
+                particles[index].position.y += particles[index].velocity.height
+                
+                // Fade out over time
+                particles[index].opacity *= 0.98
+                
+                // Calculate distance from source
+                let distance = sqrt(
+                    pow(particles[index].position.x - position.x, 2) +
+                    pow(particles[index].position.y - position.y, 2)
+                )
+                
+                // Reset particles that are too far or too faded
+                if distance > 200 || particles[index].opacity < 0.1 {
+                    let angle = Double.random(in: 0...(2 * .pi))
+                    let speed = CGFloat.random(in: 0.5...2.5) * (1.0 + CGFloat(intensity))
+                    particles[index].position = CGPoint(
+                        x: position.x + cos(angle) * 20,
+                        y: position.y + sin(angle) * 20
+                    )
+                    particles[index].velocity = CGSize(
+                        width: cos(angle) * speed,
+                        height: sin(angle) * speed
+                    )
+                    particles[index].opacity = Double.random(in: 0.5...0.95) * intensity
+                }
+            }
+        }
+    }
+    
+    private func updateParticlePositions() {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        
+        withTransaction(transaction) {
+            for index in particles.indices {
+                // Maintain relative position to source
+                let offsetX = particles[index].position.x - position.x
+                let offsetY = particles[index].position.y - position.y
+                particles[index].position = CGPoint(
+                    x: position.x + offsetX,
+                    y: position.y + offsetY
+                )
+            }
+        }
+    }
+    
+    private func updateParticleCount(for intensity: Double) {
+        let targetCount = Swift.max(20, Int(intensity * 50))
+        if particles.count < targetCount {
+            let newParticles = (0..<(targetCount - particles.count)).map { _ -> Particle in
+                let angle = Double.random(in: 0...(2 * .pi))
+                let speed = CGFloat.random(in: 0.5...2.5) * (1.0 + CGFloat(intensity))
+                let distance = CGFloat.random(in: 0...80)
+                
+                return Particle(
+                    position: CGPoint(
+                        x: position.x + cos(angle) * distance,
+                        y: position.y + sin(angle) * distance
+                    ),
+                    velocity: CGSize(
+                        width: cos(angle) * speed,
+                        height: sin(angle) * speed
+                    ),
+                    size: CGFloat.random(in: minParticleSize...maxParticleSize) * (0.8 + CGFloat(intensity) * 0.4),
+                    opacity: Double.random(in: 0.5...0.95) * intensity
+                )
+            }
+            particles.append(contentsOf: newParticles)
+        } else if particles.count > targetCount {
+            particles = Array(particles.prefix(targetCount))
+        }
+    }
+}
+
+struct Particle: Identifiable {
+    let id = UUID()
+    var position: CGPoint
+    var velocity: CGSize
+    let size: CGFloat
+    var opacity: Double // Changed to var for physics updates
+}
+
+// MARK: - Central Hub View
+struct CentralHubView: View {
+    @ObservedObject var audioManager: AudioManager
+    @State private var rotationAngle: Double = 0
+    @State private var hubScale: CGFloat = 1.0
+    
+    var activeColor: Color {
+        let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+        guard !activeTracks.isEmpty else { return AppTheme.rainBlue }
+        return SoundColor.colorForTrack(activeTracks.first?.name ?? "")
+    }
+    
+    var body: some View {
+        ZStack {
+            // Outer rotating ring
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            activeColor.opacity(0.6),
+                            activeColor.opacity(0.2)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 4
+                )
+                .frame(width: 200, height: 200)
+                .rotationEffect(.degrees(rotationAngle))
+                .blur(radius: 5)
+            
+            // Main hub
+            Button {
+                // Enhanced haptic feedback for central hub
+                let impact = UIImpactFeedbackGenerator(style: .heavy)
+                impact.prepare()
+                impact.impactOccurred()
+                
+                // Additional selection feedback
+                let selection = UISelectionFeedbackGenerator()
+                selection.selectionChanged()
+                
+                if audioManager.isPlaying {
+                    audioManager.pause()
+                } else {
+                    audioManager.play()
+                }
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: audioManager.isPlaying ? [
+                                            activeColor,
+                                            activeColor.opacity(0.5)
+                                        ] : [
+                                            Color.white.opacity(0.3),
+                                            Color.white.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 3
+                                )
+                        )
+                        .frame(width: 150, height: 150)
+                        .shadow(color: activeColor.opacity(0.6), radius: 40, x: 0, y: 20)
+                    
+                    Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 50, weight: .light, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    activeColor,
+                                    activeColor.opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                .scaleEffect(hubScale)
+            }
+            .onAppear {
+                if audioManager.isPlaying {
+                    withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+                        rotationAngle = 360
+                    }
+                }
+            }
+            .onChange(of: audioManager.isPlaying) { _, isPlaying in
+                if isPlaying {
+                    withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+                        rotationAngle = 360
+                    }
+                    withAnimation(AppTheme.Animation.spring) {
+                        hubScale = 1.1
+                    }
+                } else {
+                    withAnimation(AppTheme.Animation.smooth) {
+                        rotationAngle = 0
+                        hubScale = 1.0
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Enhanced Dynamic Immersive Background
+struct ImmersiveBackground: View {
+    let activeTracks: [AudioTrack]
+    @State private var colorOrbs: [ColorOrb] = []
+    @State private var animationTimer: Timer?
+    
+    struct ColorOrb: Identifiable {
+        let id = UUID()
+        var position: CGPoint
+        var size: CGFloat
+        var color: Color
+        var opacity: Double
+        var pulsePhase: Double = 0
+        var velocity: CGSize = .zero
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Enhanced base gradient - edge-to-edge, extends fully
+                AppTheme.background
+                    .ignoresSafeArea(.all)
+                
+                // Liquid Glass Layer 1: Content-driven color gradient
+                if !activeTracks.isEmpty {
+                    let trackNames = activeTracks.map { $0.name }
+                    AppTheme.contentGradient(for: trackNames)
+                        .opacity(0.3)
+                        .blendMode(.plusLighter)
+                        .ignoresSafeArea(.all)
+                }
+                
+                // Liquid Glass Layer 2: Dynamic color wash from active sounds (enhanced)
+                if !activeTracks.isEmpty {
+                    ForEach(activeTracks, id: \.id) { track in
+                        let color = SoundColor.colorForTrack(track.name)
+                        // Enhanced opacity for Liquid Glass - colors bleed through controls
+                        let opacity = 0.12 * track.volume
+                        color
+                            .opacity(opacity)
+                            .blendMode(.plusLighter)
+                            .animation(AppTheme.Animation.fluid, value: track.volume)
+                            .ignoresSafeArea(.all)
+                    }
+                }
+                
+                // Floating color orbs (3-5 orbs)
+                ForEach(colorOrbs) { orb in
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    orb.color.opacity(orb.opacity),
+                                    orb.color.opacity(orb.opacity * 0.5),
+                                    orb.color.opacity(0.0)
+                                ],
+                                center: .center,
+                                startRadius: orb.size * 0.3,
+                                endRadius: orb.size
+                            )
+                        )
+                        .frame(width: orb.size, height: orb.size)
+                        .position(orb.position)
+                        .blur(radius: orb.size * 0.2)
+                        .scaleEffect(1.0 + sin(orb.pulsePhase) * 0.2)
+                }
+                
+                // Active sound color orbs (pulsing with volume)
+                ForEach(activeTracks, id: \.id) { track in
+                    let color = SoundColor.colorForTrack(track.name)
+                    DynamicColorOrb(
+                        color: color,
+                        volume: track.volume,
+                        position: CGPoint(
+                            x: geometry.size.width * (0.2 + Double.random(in: 0...0.6)),
+                            y: geometry.size.height * (0.2 + Double.random(in: 0...0.6))
+                        )
+                    )
+                }
+            }
+        }
+        .ignoresSafeArea(.all)
+        .onAppear {
+            // Safely initialize background
+            generateColorOrbs()
+            startOrbAnimation()
+        }
+        .onDisappear {
+            animationTimer?.invalidate()
+        }
+        .onChange(of: activeTracks.count) { oldCount, newCount in
+            // Only update if count actually changed
+            if oldCount != newCount {
+                updateOrbsForActiveTracks()
+            }
+        }
+    }
+    
+    private func generateColorOrbs() {
+        // Generate 3-5 floating orbs - ensure safe initialization
+        let count = max(3, min(5, Int.random(in: 3...5)))
+        let availableColors: [Color] = [
+            SoundColor.rain,
+            SoundColor.ocean,
+            SoundColor.thunder,
+            SoundColor.fireplace,
+            SoundColor.meditation
+        ]
+        
+        colorOrbs = (0..<count).map { _ in
+            ColorOrb(
+                position: CGPoint(
+                    x: CGFloat.random(in: 100...800),
+                    y: CGFloat.random(in: 100...1200)
+                ),
+                size: CGFloat.random(in: 300...600),
+                color: availableColors.randomElement() ?? SoundColor.rain,
+                opacity: Double.random(in: 0.1...0.3)
+            )
+        }
+    }
+    
+    private func startOrbAnimation() {
+        // 5x slower, very relaxed animation - update every 0.25 seconds instead of 0.05
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
+            updateOrbs()
+        }
+    }
+    
+    private func updateOrbs() {
+        for index in colorOrbs.indices {
+            // Slow drift movement
+            colorOrbs[index].position.x += colorOrbs[index].velocity.width
+            colorOrbs[index].position.y += colorOrbs[index].velocity.height
+            
+            // 5x slower pulse phase update for very relaxed animation
+            colorOrbs[index].pulsePhase += 0.004
+            
+            // Very gentle velocity changes
+            colorOrbs[index].velocity.width += CGFloat.random(in: -0.01...0.01)
+            colorOrbs[index].velocity.height += CGFloat.random(in: -0.01...0.01)
+            
+            // Clamp velocity (much slower max velocity)
+            colorOrbs[index].velocity.width = clamp(colorOrbs[index].velocity.width, min: -0.2, max: 0.2)
+            colorOrbs[index].velocity.height = clamp(colorOrbs[index].velocity.height, min: -0.2, max: 0.2)
+        }
+    }
+    
+    private func updateOrbsForActiveTracks() {
+        // Adjust orb colors/intensity based on active tracks
+        let activeTracksFiltered = activeTracks.filter { $0.isActive && $0.volume > 0 }
+        if !activeTracksFiltered.isEmpty {
+            for index in colorOrbs.indices {
+                if let activeTrack = activeTracksFiltered.randomElement() {
+                    colorOrbs[index].color = SoundColor.colorForTrack(activeTrack.name)
+                    colorOrbs[index].opacity = min(0.4, Double(activeTrack.volume) * 0.3)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Dynamic Color Orb (for active sounds)
+struct DynamicColorOrb: View {
+    let color: Color
+    let volume: Double
+    let position: CGPoint
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var pulsePhase: Double = 0
+    
+    var body: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [
+                        color.opacity(0.15 * volume),
+                        color.opacity(0.08 * volume),
+                        color.opacity(0.0)
+                    ],
+                    center: .center,
+                    startRadius: 50,
+                    endRadius: 400 * CGFloat(volume)
+                )
+            )
+            .frame(width: 800 * CGFloat(volume), height: 800 * CGFloat(volume))
+            .position(position)
+            .blur(radius: 100 * CGFloat(volume))
+            .scaleEffect(pulseScale)
+            .onAppear {
+                // 5x slower, very relaxed pulsing animation (20 seconds per cycle)
+                withAnimation(.easeInOut(duration: 20.0).repeatForever(autoreverses: true)) {
+                    pulseScale = 1.03
+                }
+            }
+    }
+}
+
+// MARK: - Grid Sound Item with Tap and Long Press
+struct GridSoundItem: View {
+    @Binding var track: AudioTrack
+    @ObservedObject var audioManager: AudioManager
+    @Binding var soundsInVolumeMode: Set<UUID> // Binding to parent to disable scrolling
+    @Binding var isDraggingToDock: Set<UUID> // Binding to track dragging state
+    let dockFrame: CGRect // Dock frame for drop detection
+    let itemPosition: CGPoint // Item's current position in global coordinates
+    let onLongPress: () -> Void // Callback for long press to open modal
+    
+    @State private var isPressed = false
+    @State private var isVolumeMode = false
+    @State private var rotationAngle: Double = 0
+    @State private var lastRotationAngle: Double = 0
+    @State private var isDragging = false
+    @State private var isDraggingToDockLocal = false // Local state for this item
+    @State private var dragOffset: CGSize = .zero
+    @State private var dragStartPosition: CGPoint = .zero // Track item position when drag started
+    @State private var currentGlobalCenter: CGPoint = .zero // Track current center in global coordinates
+    @State private var lastVolumeUpdateTime: Date = Date()
+    private let volumeUpdateThrottle: TimeInterval = 0.05 // Update volume max every 50ms
+    
+    private var trackColor: Color {
+        SoundColor.colorForTrack(track.name)
+    }
+    
+    private var isActive: Bool {
+        track.isActive && track.volume > 0
+    }
+    
+    // Constants for sound orb sizing - smaller for 4-column grid
+    private var baseSize: CGFloat { 70 } // Smaller size for 4 columns
+    private var volumeModeSize: CGFloat { 90 } // Larger when in volume mode
+    private var cornerRadius: CGFloat { 16 } // More rounded for premium feel
+    
+    // Background glow helper - subtle white glow
+    private var backgroundGlow: some View {
+        RoundedRectangle(cornerRadius: cornerRadius + 8)
+            .fill(
+                RadialGradient(
+                    colors: [
+                        Color.white.opacity(0.2 * Double(track.volume)),
+                        Color.white.opacity(0.1 * Double(track.volume)),
+                        Color.white.opacity(0.05 * Double(track.volume)),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: baseSize * 0.7
+                )
+            )
+            .frame(width: isVolumeMode ? volumeModeSize + 30 : baseSize + 20, 
+                   height: isVolumeMode ? volumeModeSize + 30 : baseSize + 20)
+            .blur(radius: 20)
+    }
+    
+    // Border gradient helper
+    private var borderGradient: LinearGradient {
+        let activeColors = [
+            trackColor.opacity(0.8),
+            trackColor.opacity(0.5),
+            trackColor.opacity(0.3),
+            trackColor.opacity(0.5),
+            trackColor.opacity(0.8)
+        ]
+        let inactiveColors = [
+            Color.white.opacity(0.25),
+            Color.white.opacity(0.15),
+            Color.white.opacity(0.1),
+            Color.white.opacity(0.15),
+            Color.white.opacity(0.25)
+        ]
+        return LinearGradient(
+            colors: isActive ? activeColors : inactiveColors,
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    // Main glass card view - see-through white liquid glass
+    private var glassCard: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(.ultraThinMaterial)
+            .opacity(0.4) // More see-through
+            .overlay(
+                // White tint overlay for see-through white effect
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.15),
+                                Color.white.opacity(0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(secondaryMaterialLayer)
+            .overlay(borderStroke)
+            .overlay(orbHighlight)
+            .frame(width: isVolumeMode ? volumeModeSize : baseSize, 
+                   height: isVolumeMode ? volumeModeSize : baseSize)
+            .shadow(color: Color.white.opacity(isActive ? 0.3 : 0.1), 
+                   radius: isActive ? 12 : 4,
+                   x: 0, y: isActive ? 4 : 2)
+            .shadow(color: Color.black.opacity(0.05), 
+                   radius: isActive ? 6 : 2,
+                   x: 0, y: isActive ? 2 : 1)
+            .scaleEffect(isPressed ? 0.96 : (isDraggingToDockLocal ? 1.1 : 1.0))
+            .opacity(isDraggingToDockLocal ? 0.8 : 1.0)
+            .overlay(orbIcon)
+            .overlay(orbPulseRing)
+    }
+    
+    // Secondary material layer - white tint
+    private var secondaryMaterialLayer: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.15),
+                        Color.white.opacity(0.05)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+    }
+    
+    // Border stroke - see-through white
+    private var borderStroke: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .stroke(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.5),
+                        Color.white.opacity(0.3),
+                        Color.white.opacity(0.2),
+                        Color.white.opacity(0.3),
+                        Color.white.opacity(0.5)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: isActive ? 2.0 : 1.5
+            )
+    }
+    
+    // Volume dial view
+    private var volumeDial: some View {
+        ZStack {
+            volumeArc
+            volumeIndicator
+        }
+        .rotationEffect(.degrees(rotationAngle))
+        .animation(nil, value: rotationAngle)
+    }
+    
+    private var soundOrb: some View {
+        ZStack {
+            // Background glow when active
+            if isActive {
+                backgroundGlow
+            }
+            
+            // Liquid Glass rounded rectangle
+            ZStack {
+                glassCard
+                
+                // Volume dial (rotates independently around the icon)
+                if isVolumeMode {
+                    volumeDial
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .animation(isDragging ? nil : AppTheme.Animation.liquidSpring, value: isVolumeMode)
+        .animation(nil, value: rotationAngle)
+    }
+    
+    private var orbBorder: some View {
+        RoundedRectangle(cornerRadius: 20)
+            .stroke(
+                LinearGradient(
+                    colors: isActive ? [
+                        trackColor.opacity(0.6),
+                        trackColor.opacity(0.3)
+                    ] : [
+                        Color.white.opacity(0.2),
+                        Color.white.opacity(0.1)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: isActive ? 2 : 1
+            )
+    }
+    
+    private var orbHighlight: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(isActive ? 0.4 : 0.2),
+                        Color.white.opacity(isActive ? 0.2 : 0.1),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .center
+                )
+            )
+    }
+    
+    private var orbIcon: some View {
+        let iconSize: CGFloat = isVolumeMode ? 32 : 28 // Smaller icons for smaller elements
+        
+        return Image(systemName: track.icon)
+            .font(.system(size: iconSize, weight: .semibold, design: .rounded))
+            .foregroundStyle(
+                // Clean white icon styling
+                LinearGradient(
+                    colors: isActive ? [
+                        Color.white.opacity(0.95), // Premium white
+                        Color.white.opacity(0.85)
+                    ] : [
+                        Color.white.opacity(0.8),
+                        Color.white.opacity(0.6)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .scaleEffect(isActive && !isVolumeMode ? (1.0 + sin(Date().timeIntervalSince1970 * 1.0) * 0.03) : 1.0) // Subtle, slow pulsation when active
+            .animation(isActive && !isVolumeMode ? .easeInOut(duration: 2.5).repeatForever(autoreverses: true) : .default, value: isActive)
+    }
+    
+    private var orbPulseRing: some View {
+        Group {
+            if isActive && !isVolumeMode {
+                // Sound ring for selected state - more visible and properly sized
+                RoundedRectangle(cornerRadius: cornerRadius + 2)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.6),
+                                Color.white.opacity(0.4),
+                                Color.white.opacity(0.6)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2.0
+                    )
+                    .frame(width: baseSize + 4, height: baseSize + 4) // Slightly larger than base tile
+                    .scaleEffect(1.0 + sin(Date().timeIntervalSince1970 * 1.5) * 0.08) // Slower, subtler pulse
+            }
+        }
+    }
+    
+    private var volumeArc: some View {
+        Group {
+            if isVolumeMode {
+                // Volume indicator for rounded rectangles - using overlay border, white theme
+                RoundedRectangle(cornerRadius: cornerRadius + 2)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.8 * Double(track.volume)),
+                                Color.white.opacity(0.4 * Double(track.volume))
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 3
+                    )
+                    .frame(width: volumeModeSize + 4, height: volumeModeSize + 4)
+                    .opacity(track.volume > 0 ? 1 : 0)
+                    .animation(nil, value: track.volume)
+            }
+        }
+    }
+    
+    private var volumeIndicator: some View {
+        Group {
+            if isVolumeMode {
+                // Indicator dot at top of rounded rectangle - white theme
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 10, height: 10)
+                    .offset(y: -(volumeModeSize / 2 + 2))
+                    .shadow(color: Color.white.opacity(0.6), radius: 3)
+            }
+        }
+    }
+    
+    var body: some View {
+        // Label underneath the tile
+        VStack(spacing: 6) {
+            soundOrb
+            
+            // Track name underneath - small label
+            Text(track.name)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(height: 14) // Fixed height for consistent spacing
+                .allowsHitTesting(false) // Don't interfere with tile interactions
+        }
+        .contentShape(Rectangle())
+        .offset(dragOffset)
+        .background(
+            GeometryReader { itemGeometry in
+                let globalFrame = itemGeometry.frame(in: .global)
+                let globalCenter = globalFrame.center
+                
+                Color.clear
+                    .preference(
+                        key: GridItemPositionPreferenceKey.self,
+                        value: [track.id: globalCenter]
+                    )
+                    .onChange(of: dragOffset) { _, _ in
+                        // Update current global center when drag offset changes
+                        // The frame includes the offset, so this gives us the dragged position
+                        currentGlobalCenter = globalCenter
+                    }
+                    .onAppear {
+                        currentGlobalCenter = globalCenter
+                    }
+                    .onChange(of: globalFrame) { _, _ in
+                        // Also update when frame changes (which happens as offset changes)
+                        currentGlobalCenter = globalCenter
+                    }
+            }
+        )
+        .onTapGesture {
+            // Tap to toggle sound on/off (not open modal)
+            // Only toggle if not dragging
+            guard !isDraggingToDockLocal else { return }
+            
+            // Haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.prepare()
+            impact.impactOccurred()
+            
+            // Toggle track on/off
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                let currentTrack = audioManager.tracks[index]
+                let newActiveState = !currentTrack.isActive
+                
+                print("🎵 Grid tile tap: \(track.name) - \(currentTrack.isActive ? "ON" : "OFF") → \(newActiveState ? "ON" : "OFF")")
+                
+                // Toggle track FIRST (before updating array) - this handles play/pause correctly
+                audioManager.toggleTrack(track.id, isActive: newActiveState)
+                
+                // Now update the array state
+                var updatedTrack = currentTrack
+                updatedTrack.isActive = newActiveState
+                
+                if newActiveState {
+                    // If activating, set default volume
+                    if updatedTrack.volume == 0 {
+                        updatedTrack.volume = 0.5
+                    }
+                    audioManager.tracks[index] = updatedTrack
+                    audioManager.updateTrackVolume(track.id, volume: updatedTrack.volume)
+                } else {
+                    // If deactivating, set volume to 0
+                    updatedTrack.volume = 0.0
+                    audioManager.tracks[index] = updatedTrack
+                    audioManager.updateTrackVolume(track.id, volume: 0.0)
+                }
+                
+                // Save mix state after user interaction
+                let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+                StatePersistenceService.shared.saveLastActiveMix(activeTracks)
+            }
+        }
+        .highPriorityGesture(
+            // Drag to dock gesture - only when not in volume mode and not already active
+            !isVolumeMode && !isActive ? DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    if !isDraggingToDockLocal {
+                        isDraggingToDockLocal = true
+                        isPressed = true
+                        // Store item's position when drag starts (before offset is applied)
+                        dragStartPosition = itemPosition
+                        // Initialize current global center
+                        currentGlobalCenter = itemPosition
+                        // Notify parent to disable scrolling
+                        isDraggingToDock.insert(track.id)
+                        // Light haptic feedback on drag start
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.prepare()
+                        impact.impactOccurred()
+                    }
+                    
+                    // Update drag offset - free movement (x and y)
+                    dragOffset = value.translation
+                }
+                .onEnded { value in
+                    isPressed = false
+                    let wasDraggingToDock = isDraggingToDockLocal
+                    isDraggingToDockLocal = false
+                    // Notify parent to re-enable scrolling
+                    isDraggingToDock.remove(track.id)
+                    
+                    // Calculate drop position in global coordinates
+                    // Calculate from start position + final translation
+                    let dropPosition = CGPoint(
+                        x: dragStartPosition.x + value.translation.width,
+                        y: dragStartPosition.y + value.translation.height
+                    )
+                    
+                    // Check if dropped over dock area (with expanded tolerance)
+                    // Expand dock frame slightly for easier drop detection
+                    let expandedDockFrame = dockFrame.isEmpty ? .zero : CGRect(
+                        x: dockFrame.minX - 20,
+                        y: dockFrame.minY - 20,
+                        width: dockFrame.width + 40,
+                        height: dockFrame.height + 40
+                    )
+                    
+                    // Debug: Log drop detection
+                    if wasDraggingToDock {
+                        print("🎯 Drop detection - Track: \(track.name)")
+                        print("   Drag start position: \(dragStartPosition)")
+                        print("   Translation: \(value.translation)")
+                        print("   Calculated drop position: \(dropPosition)")
+                        print("   Dock frame: \(dockFrame)")
+                        print("   Expanded frame: \(expandedDockFrame)")
+                        print("   Dock Y range: \(expandedDockFrame.minY) to \(expandedDockFrame.maxY)")
+                        print("   Drop Y: \(dropPosition.y)")
+                        print("   Y in range: \(dropPosition.y >= expandedDockFrame.minY && dropPosition.y <= expandedDockFrame.maxY)")
+                        print("   X in range: \(dropPosition.x >= expandedDockFrame.minX && dropPosition.x <= expandedDockFrame.maxX)")
+                        print("   Contains drop: \(expandedDockFrame.contains(dropPosition))")
+                    }
+                    
+                    // Also check if dropped in bottom area of screen (more lenient detection)
+                    // If Y is in the bottom 200 points of screen, consider it a dock drop
+                    let screenBottom: CGFloat = 800 // Approximate screen height
+                    let bottomAreaThreshold: CGFloat = 200
+                    let isInBottomArea = dropPosition.y > (screenBottom - bottomAreaThreshold)
+                    
+                    if wasDraggingToDock && isInBottomArea {
+                        print("✅ Dropped in bottom area - treating as dock drop!")
+                    }
+                    
+                    // Check if dropped over dock area OR in bottom area of screen
+                    let droppedInDock = !dockFrame.isEmpty && expandedDockFrame.contains(dropPosition)
+                    let droppedInBottomArea = isInBottomArea
+                    
+                    if wasDraggingToDock && (droppedInDock || droppedInBottomArea) {
+                        print("✅ Dropped \(track.name) into dock!")
+                        // Calculate volume based on horizontal position within dock
+                        let relativeX = dropPosition.x - dockFrame.minX
+                        let dockWidth = dockFrame.width
+                        let positionRatio = max(0, min(1, relativeX / dockWidth)) // Clamp 0-1
+                        
+                        // Determine volume based on position:
+                        // Left third (0-0.33): 20% (15-25% range)
+                        // Middle third (0.33-0.67): 50%
+                        // Right third (0.67-1.0): 85% (75-100% range)
+                        let volume: Double
+                        if positionRatio < 0.33 {
+                            // Left side: 20%
+                            volume = 0.20
+                        } else if positionRatio < 0.67 {
+                            // Middle: 50%
+                            volume = 0.50
+                        } else {
+                            // Right side: 85%
+                            volume = 0.85
+                        }
+                        
+                        // Medium haptic feedback on successful drop
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.prepare()
+                        impact.impactOccurred()
+                        
+                        // Activate track and add to mix with calculated volume
+                        // Always update when dropped into dock, regardless of current state
+                        if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                            var updatedTrack = audioManager.tracks[index]
+                            let wasActive = updatedTrack.isActive
+                            
+                            // Always set active and volume when dropped into dock
+                            updatedTrack.isActive = true
+                            updatedTrack.volume = volume
+                            audioManager.tracks[index] = updatedTrack
+                            
+                            // Update volume first
+                            audioManager.updateTrackVolume(track.id, volume: volume)
+                            
+                            // Toggle track if it wasn't already active
+                            if !wasActive {
+                                audioManager.toggleTrack(track.id, isActive: true)
+                            }
+                            
+                            // Ensure playback is started
+                            if let player = audioManager.audioPlayers[track.id] {
+                                if player.rate == 0 {
+                                    player.play()
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Reset drag offset with animation
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        dragOffset = .zero
+                    }
+                }
+            : nil
+        )
+        .simultaneousGesture(
+            // Rotation gesture for volume control (only active in volume mode)
+            isVolumeMode ? DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    if !isDragging {
+                        isDragging = true
+                        // Haptic feedback on drag start
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.prepare()
+                        impact.impactOccurred()
+                    }
+                    
+                    // Calculate angle from center
+                    // When in volume mode, orb is 120x120, so center is 60,60
+                    // We need to get the actual center of the orb in the view
+                    let orbSize: CGFloat = isVolumeMode ? 120 : 100
+                    let center = CGPoint(x: orbSize / 2, y: orbSize / 2)
+                    let currentAngle = atan2(value.location.y - center.y, value.location.x - center.x)
+                    
+                    // Convert to degrees (-180 to 180)
+                    var currentDegrees = currentAngle * 180 / .pi
+                    
+                    // Normalize to 0-360 range
+                    if currentDegrees < 0 {
+                        currentDegrees += 360
+                    }
+                    
+                    // Convert to -180 to 180 for rotation calculation
+                    var normalizedCurrent = currentDegrees
+                    if normalizedCurrent > 180 {
+                        normalizedCurrent -= 360
+                    }
+                    
+                    // Calculate delta from last position
+                    var delta = normalizedCurrent - lastRotationAngle
+                    
+                    // Handle wrap-around (crossing 180/-180 boundary)
+                    if abs(delta) > 180 {
+                        if delta > 0 {
+                            delta -= 360
+                        } else {
+                            delta += 360
+                        }
+                    }
+                    
+                    // Update rotation angle directly (no animation to avoid conflicts)
+                    // Use Transaction to explicitly disable animations
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    
+                    var newAngle = rotationAngle + delta
+                    
+                    // Clamp rotation angle (-180 to +180)
+                    newAngle = max(-180, min(180, newAngle))
+                    
+                    // Update without triggering animations
+                    withTransaction(transaction) {
+                        rotationAngle = newAngle
+                    }
+                    
+                    // Convert rotation to volume
+                    // rotationAngle: -180 (min) to +180 (max)
+                    // volume: 0.0 to 1.0
+                    let newVolume = (rotationAngle + 180) / 360
+                    let clampedVolume = max(0.0, min(1.0, newVolume))
+                    
+                    // Throttle volume updates to avoid excessive calls
+                    let now = Date()
+                    let timeSinceLastUpdate = now.timeIntervalSince(lastVolumeUpdateTime)
+                    
+                    // Only update if enough time has passed or volume changed significantly (>2%)
+                    let volumeDelta = abs(clampedVolume - track.volume)
+                    if timeSinceLastUpdate >= volumeUpdateThrottle || volumeDelta > 0.02 {
+                        // Update volume with haptic feedback at milestones
+                        let oldMilestone = Int(track.volume * 4)
+                        let newMilestone = Int(clampedVolume * 4)
+                        
+                        if newMilestone != oldMilestone && newMilestone >= 0 && newMilestone <= 4 {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.prepare()
+                            impact.impactOccurred()
+                        }
+                        
+                        // Update track volume
+                        if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                            audioManager.tracks[index].volume = clampedVolume
+                            audioManager.updateTrackVolume(track.id, volume: clampedVolume)
+                            
+                            // Save mix state after volume change (throttled)
+                            if timeSinceLastUpdate >= volumeUpdateThrottle {
+                                let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+                                StatePersistenceService.shared.saveLastActiveMix(activeTracks)
+                            }
+                        }
+                        
+                        lastVolumeUpdateTime = now
+                    }
+                    
+                    lastRotationAngle = normalizedCurrent
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    
+                    // Exit volume mode after a brief delay to show final volume state
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        // Only exit if we're still in volume mode and not dragging again
+                        if isVolumeMode && !isDragging {
+                            withAnimation(AppTheme.Animation.spring) {
+                                isVolumeMode = false
+                            }
+                            // Notify parent to re-enable scrolling
+                            soundsInVolumeMode.remove(track.id)
+                        }
+                    }
+                }
+            : nil
+        )
+        .onTapGesture {
+            // If in volume mode, exit volume mode
+            if isVolumeMode {
+                isDragging = false
+                // Don't reset rotation angle - keep it so volume dial position is preserved visually
+                // Exit volume mode with spring animation (size will animate back to normal)
+                withAnimation(AppTheme.Animation.spring) {
+                    isVolumeMode = false
+                }
+                // Notify parent to re-enable scrolling (if no other sounds are in volume mode)
+                soundsInVolumeMode.remove(track.id)
+                return
+            }
+            
+            // Otherwise, toggle track on/off
+            
+            // Toggle track on/off
+            let newState = !isActive
+            
+            print("🎵 Toggling track: \(track.name) to \(newState ? "ON" : "OFF")")
+            
+            // Haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: newState ? .medium : .light)
+            impact.prepare()
+            impact.impactOccurred()
+            
+            // Update track state
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                let currentTrack = audioManager.tracks[index]
+                var updatedTrack = currentTrack
+                
+                // Calculate new volume
+                if newState {
+                    // Turn on - set to 50% volume if was off
+                    if updatedTrack.volume == 0 {
+                        updatedTrack.volume = 0.5
+                    }
+                    print("🔊 Setting volume to: \(Int(updatedTrack.volume * 100))%")
+                } else {
+                    // Turn off
+                    updatedTrack.volume = 0.0
+                }
+                
+                // Toggle track FIRST (before updating array) - this handles play/pause correctly
+                // toggleTrack checks the current state in the array, so we must call it before updating
+                audioManager.toggleTrack(track.id, isActive: newState)
+                
+                // Now update the array state
+                updatedTrack.isActive = newState
+                audioManager.tracks[index] = updatedTrack
+                
+                // Then update volume - this ensures volume is set correctly without restarting playback
+                audioManager.updateTrackVolume(track.id, volume: updatedTrack.volume)
+                
+                // Save mix state after user interaction
+                let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+                StatePersistenceService.shared.saveLastActiveMix(activeTracks)
+                
+                // Verify playback after a short delay
+                if newState {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if let player = audioManager.audioPlayers[track.id] {
+                            if player.rate == 0 {
+                                print("⚠️ Player not playing after toggle, forcing play...")
+                                player.play()
+                            } else {
+                                print("✅ Player is playing: \(track.name), rate: \(player.rate), volume: \(player.volume)")
+                            }
+                        } else {
+                            print("⚠️ Player not found for track: \(track.name)")
+                        }
+                    }
+                }
+            }
+        }
+        .onChange(of: isVolumeMode) { _, showing in
+            if !showing {
+                isDragging = false
+            }
+        }
+        .onChange(of: soundsInVolumeMode.contains(track.id)) { _, shouldBeInVolumeMode in
+            // Automatically enter volume mode if track ID is in the set
+            if shouldBeInVolumeMode && !isVolumeMode {
+                // Initialize rotation angle based on current volume
+                let initialAngle = (track.volume * 360) - 180
+                rotationAngle = initialAngle
+                lastRotationAngle = initialAngle
+                
+                withAnimation(AppTheme.Animation.spring) {
+                    isVolumeMode = true
+                }
+            } else if !shouldBeInVolumeMode && isVolumeMode {
+                // Exit volume mode if removed from set
+                isDragging = false
+                withAnimation(nil) {
+                    rotationAngle = 0
+                }
+                withAnimation(AppTheme.Animation.spring) {
+                    isVolumeMode = false
+                }
+            }
+        }
+    }
+}
+
+
+// MARK: - Active Mix Dock
+struct ActiveMixDock: View {
+    let activeTracks: [AudioTrack]
+    @ObservedObject var audioManager: AudioManager
+    @Binding var soundsInVolumeMode: Set<UUID>
+    @Binding var selectedTrackForModal: AudioTrack? // Shared with parent for modal state
+    let screenHeight: CGFloat // Full screen height for volume control range
+    let bottomSafeArea: CGFloat // Bottom safe area padding
+    let dockWidth: CGFloat? // Optional width to match grid (3 tiles width)
+    let onDockFrameChange: ((CGRect) -> Void)? // Callback to report dock frame
+    
+    @State private var dockAnchors: [UUID: CGPoint] = [:] // Track element anchor points in global coordinates
+    
+    init(activeTracks: [AudioTrack], 
+         audioManager: AudioManager, 
+         soundsInVolumeMode: Binding<Set<UUID>>, 
+         selectedTrackForModal: Binding<AudioTrack?>, 
+         screenHeight: CGFloat, 
+         bottomSafeArea: CGFloat,
+         dockWidth: CGFloat? = nil,
+         onDockFrameChange: ((CGRect) -> Void)? = nil) {
+        self.activeTracks = activeTracks
+        self.audioManager = audioManager
+        self._soundsInVolumeMode = soundsInVolumeMode
+        self._selectedTrackForModal = selectedTrackForModal
+        self.screenHeight = screenHeight
+        self.bottomSafeArea = bottomSafeArea
+        self.dockWidth = dockWidth
+        self.onDockFrameChange = onDockFrameChange
+    }
+    
+    var body: some View {
+        // When dockWidth is provided (grid mode), render directly without GeometryReader
+        // This prevents double rendering - the parent already handles positioning
+        if let dockWidth = dockWidth {
+            // Grid mode: Simple dock content - parent handles positioning and centering
+            ZStack {
+                // Full-screen overlay for volume-mode elements
+                ForEach(activeTracks, id: \.id) { track in
+                    if soundsInVolumeMode.contains(track.id), let anchor = dockAnchors[track.id] {
+                        DockSoundChip(
+                            track: track,
+                            audioManager: audioManager,
+                            soundsInVolumeMode: $soundsInVolumeMode,
+                            availableHeight: screenHeight,
+                            isOverlay: true,
+                            dockAnchor: anchor,
+                            onTap: {
+                                selectedTrackForModal = track
+                            }
+                        )
+                        .position(x: anchor.x, y: anchor.y)
+                        .zIndex(1000)
+                        .allowsHitTesting(true)
+                        .drawingGroup()
+                    }
+                }
+                
+                // Dock content - only show when modal is closed, centered
+                if selectedTrackForModal == nil {
+                    dockContentBody(width: dockWidth)
+                        .frame(maxWidth: dockWidth) // Ensure proper width constraint
+                }
+            }
+            .frame(maxWidth: .infinity) // Allow parent to center
+            .onPreferenceChange(DockElementPositionPreferenceKey.self) { anchors in
+                for (id, anchor) in anchors {
+                    dockAnchors[id] = anchor
+                }
+            }
+        } else {
+            // Focus mode: Need GeometryReader for full-screen overlay positioning
+            GeometryReader { geometry in
+                ZStack {
+                    // Full-screen overlay for volume-mode elements
+                    ForEach(activeTracks, id: \.id) { track in
+                        if soundsInVolumeMode.contains(track.id), let anchor = dockAnchors[track.id] {
+                            DockSoundChip(
+                                track: track,
+                                audioManager: audioManager,
+                                soundsInVolumeMode: $soundsInVolumeMode,
+                                availableHeight: screenHeight,
+                                isOverlay: true,
+                                dockAnchor: anchor,
+                                onTap: {
+                                    selectedTrackForModal = track
+                                }
+                            )
+                            .position(x: anchor.x, y: anchor.y)
+                            .zIndex(1000)
+                            .allowsHitTesting(true)
+                            .drawingGroup()
+                        }
+                    }
+                    
+                    // Focus mode: iOS-style dock at very bottom
+                    if selectedTrackForModal == nil {
+                        VStack {
+                            Spacer()
+                            
+                            // iOS-style dock - full width with small padding, at very bottom
+                            dockContentBody(width: geometry.size.width - (AppSpacing.md * 2))
+                                .padding(.horizontal, AppSpacing.md) // Small horizontal padding like iOS
+                                .padding(.bottom, max(bottomSafeArea - 0, 0)) // Position lower, closer to bottom edge
+                        }
+                    }
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .onPreferenceChange(DockElementPositionPreferenceKey.self) { anchors in
+                    for (id, anchor) in anchors {
+                        dockAnchors[id] = anchor
+                    }
+                }
+            }
+        }
+    }
+    
+    // iOS-style dock content - always shown on grid screen
+    @ViewBuilder
+    private func dockContentBody(width: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            // Horizontal scrolling dock with iOS-style background
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.lg) { // Generous spacing like iOS dock
+                    ForEach(activeTracks, id: \.id) { track in
+                        DockSoundChip(
+                            track: track,
+                            audioManager: audioManager,
+                            soundsInVolumeMode: $soundsInVolumeMode,
+                            availableHeight: screenHeight,
+                            isOverlay: false,
+                            dockAnchor: nil,
+                            onTap: {
+                                selectedTrackForModal = track
+                            }
+                        )
+                        .background(
+                            GeometryReader { chipGeometry in
+                                Color.clear
+                                    .preference(
+                                        key: DockElementPositionPreferenceKey.self,
+                                        value: [track.id: chipGeometry.frame(in: .global).center]
+                                    )
+                            }
+                        )
+                        .opacity(soundsInVolumeMode.contains(track.id) ? 0 : 1) // Hide when in overlay
+                    }
+                }
+                .padding(.horizontal, AppSpacing.lg) // iOS-style padding
+                .padding(.vertical, AppSpacing.md) // iOS-style vertical padding
+            }
+            .scrollDisabled(!soundsInVolumeMode.isEmpty)
+        }
+        .frame(width: width)
+        // iOS dock styling - matches system dock exactly
+        .background {
+            RoundedRectangle(cornerRadius: 48) // iOS dock corner radius - more rounded
+                .fill(.ultraThinMaterial) // iOS dock material
+                .opacity(0.85) // iOS dock opacity
+        }
+        .background(
+            GeometryReader { dockGeometry in
+                Color.clear
+                    .preference(
+                        key: DockFramePreferenceKey.self,
+                        value: dockGeometry.frame(in: .global)
+                    )
+            }
+        )
+        .onPreferenceChange(DockFramePreferenceKey.self) { frame in
+            onDockFrameChange?(frame)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 48)
+                .stroke(Color.white.opacity(0.1), lineWidth: 0.5) // Subtle border like iOS
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: -5) // iOS dock shadow
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+// Extension to get center point from CGRect
+extension CGRect {
+    var center: CGPoint {
+        CGPoint(x: midX, y: midY)
+    }
+}
+
+// MARK: - Sound Control Modal (Rebuilt)
+struct SoundControlModal: View {
+    let track: AudioTrack
+    @ObservedObject var audioManager: AudioManager
+    let topSafeArea: CGFloat
+    let onDismiss: () -> Void
+    
+    // CRITICAL: Store track ID at initialization to ensure we always reference the correct track
+    private let trackId: UUID
+    
+    @State private var currentVolume: Double
+    @State private var isDraggingSlider = false
+    
+    init(track: AudioTrack, audioManager: AudioManager, topSafeArea: CGFloat, onDismiss: @escaping () -> Void) {
+        self.track = track
+        self.trackId = track.id // Store ID at init to prevent any reference issues
+        self.audioManager = audioManager
+        self.topSafeArea = topSafeArea
+        self.onDismiss = onDismiss
+        self._currentVolume = State(initialValue: track.volume)
+    }
+    
+    // Get current track from audioManager to ensure we have latest data
+    // Always use the stored trackId to ensure we get the correct track
+    private var currentTrack: AudioTrack? {
+        audioManager.tracks.first(where: { $0.id == trackId })
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Backdrop - visual only
+                Color.black.opacity(0.15)
+                    .ignoresSafeArea(.all)
+                    .allowsHitTesting(false)
+                
+                // Tap-to-dismiss backdrop - modal content will block taps on it
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // If this receives a tap, it's outside the modal (modal blocks taps on it)
+                        onDismiss()
+                    }
+                
+                // Modal content - positioned at top, centered
+                VStack(spacing: 0) {
+                    Spacer()
+                        .frame(height: topSafeArea)
+                    
+                    if let track = currentTrack {
+                        modalContent(track: track)
+                            .background(
+                                GeometryReader { modalGeometry in
+                                    Color.clear
+                                        .preference(
+                                            key: ModalFramePreferenceKey.self,
+                                            value: modalGeometry.frame(in: .global)
+                                        )
+                                }
+                            )
+                    }
+                    
+                    Spacer()
+                }
+            }
+        }
+        .onAppear {
+            // CRITICAL: Sync volume with actual track state when modal appears
+            // This ensures the display is always accurate when opening the modal
+            if let currentTrack = currentTrack {
+                let actualVolume = currentTrack.volume
+                if abs(actualVolume - currentVolume) > 0.001 {
+                    currentVolume = actualVolume
+                }
+            }
+        }
+        .onChange(of: audioManager.tracks) { oldTracks, newTracks in
+            // CRITICAL: Only sync volume for THIS specific track ID
+            // Do NOT sync if we're currently dragging the slider
+            guard !isDraggingSlider else { return }
+            
+            // Find the old and new track states for THIS specific track using stored trackId
+            guard let oldTrack = oldTracks.first(where: { $0.id == trackId }),
+                  let newTrack = newTracks.first(where: { $0.id == trackId }) else {
+                return
+            }
+            
+            // Double-check we have the right track
+            guard oldTrack.id == trackId && newTrack.id == trackId else {
+                print("⚠️ SoundControlModal: Track ID mismatch in onChange!")
+                return
+            }
+            
+            // Only sync if the volume actually changed for THIS track
+            guard abs(oldTrack.volume - newTrack.volume) > 0.001 else { return }
+            
+            // Only sync if the new volume is significantly different from our current UI state
+            guard abs(newTrack.volume - currentVolume) > 0.01 else { return }
+            
+            // Update UI to match the new volume
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                currentVolume = newTrack.volume
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func modalContent(track: AudioTrack) -> some View {
+        let trackColor = SoundColor.colorForTrack(track.name)
+        
+        // CRITICAL: Compute display volume once at function level
+        // Use actual track volume when not dragging, currentVolume when dragging
+        let displayVolume = isDraggingSlider ? currentVolume : (currentTrack?.volume ?? currentVolume)
+        
+        return VStack(spacing: AppSpacing.xl) {
+            // Header: Icon and name
+            VStack(spacing: AppSpacing.md) {
+                // Icon with Liquid Glass
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(.thinMaterial)
+                                .opacity(0.3)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            trackColor.opacity(0.7),
+                                            trackColor.opacity(0.4),
+                                            trackColor.opacity(0.3),
+                                            trackColor.opacity(0.4),
+                                            trackColor.opacity(0.7)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 2.5
+                                )
+                        )
+                        .frame(width: 80, height: 80)
+                        .shadow(color: trackColor.opacity(0.4), radius: 16, x: 0, y: 6)
+                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 3)
+                    
+                    Image(systemName: track.icon)
+                        .font(.system(size: 36, weight: .semibold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.95),
+                                    Color.white.opacity(0.85)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                
+                VStack(spacing: AppSpacing.xs) {
+                    Text(track.name)
+                        .font(.system(size: AppTypography.h2, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    Text("Active Sound")
+                        .font(.system(size: AppTypography.caption, weight: .medium, design: .rounded))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+            }
+            
+            // Volume control
+            VStack(spacing: AppSpacing.md) {
+                HStack {
+                    Text("Volume")
+                        .font(.system(size: AppTypography.body, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.9))
+                    
+                    Spacer()
+                    
+                    // Use computed displayVolume
+                    Text("\(Int(displayVolume * 100))%")
+                        .font(.system(size: AppTypography.body, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, AppSpacing.sm)
+                        .padding(.vertical, AppSpacing.xs)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(trackColor.opacity(0.3), lineWidth: 1.5)
+                                )
+                        )
+                }
+                
+                // Volume slider - isolated gesture (passes displayVolume)
+                volumeSlider(trackColor: trackColor, displayVolume: displayVolume)
+            }
+            
+            // Remove button - standard Button (no gesture conflicts)
+            Button(action: {
+                // Haptic feedback
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                
+                print("🗑️ Remove from Mix: \(track.name)")
+                
+                // CRITICAL: Use stored trackId to ensure we're removing the correct track
+                // Toggle track off FIRST (before updating array) - this stops playback
+                audioManager.toggleTrack(trackId, isActive: false)
+                
+                // Then update the array state and volume
+                if let index = audioManager.tracks.firstIndex(where: { $0.id == trackId }) {
+                    // Double-check we have the right track
+                    guard audioManager.tracks[index].id == trackId else {
+                        print("⚠️ Remove button: Track ID mismatch!")
+                        return
+                    }
+                    audioManager.tracks[index].isActive = false
+                    audioManager.tracks[index].volume = 0.0
+                }
+                
+                // Set volume to 0 - ensures volume is 0
+                audioManager.updateTrackVolume(trackId, volume: 0.0)
+                
+                // Save mix state
+                let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+                StatePersistenceService.shared.saveLastActiveMix(activeTracks)
+                
+                // Close modal after removal
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    onDismiss()
+                }
+            }) {
+                HStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Remove from Mix")
+                        .font(.system(size: AppTypography.body, weight: .semibold, design: .rounded))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1.5)
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, AppSpacing.xl)
+        .padding(.horizontal, AppSpacing.lg)
+        .frame(maxWidth: 340)
+        .fixedSize(horizontal: false, vertical: true)
+        .liquidGlass(intensity: 1.0, cornerRadius: 24, blurIntensity: .medium, opacityLevel: .content)
+    }
+    
+    @ViewBuilder
+    private func volumeSlider(trackColor: Color, displayVolume: Double) -> some View {
+        return GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                // Track background - gesture target
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity(0.15))
+                    .frame(height: 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                isDraggingSlider = true
+                                let newVolume = max(0, min(1, value.location.x / geometry.size.width))
+                                currentVolume = newVolume
+                                
+                                // CRITICAL: Update volume immediately - ONLY for this specific track ID
+                                // Use stored trackId to ensure we're updating the correct track
+                                audioManager.updateTrackVolume(trackId, volume: newVolume)
+                                
+                                // Haptic feedback at milestones
+                                let milestone = Int(newVolume * 4)
+                                if milestone != Int((value.startLocation.x / geometry.size.width) * 4) {
+                                    let intensity: UIImpactFeedbackGenerator.FeedbackStyle = 
+                                        (milestone == 0 || milestone == 4) ? .medium : .light
+                                    let impact = UIImpactFeedbackGenerator(style: intensity)
+                                    impact.impactOccurred()
+                                }
+                            }
+                            .onEnded { value in
+                                isDraggingSlider = false
+                                let finalVolume = max(0, min(1, value.location.x / geometry.size.width))
+                                currentVolume = finalVolume
+                                
+                                // CRITICAL: Update volume for this specific track only using stored trackId
+                                audioManager.updateTrackVolume(trackId, volume: finalVolume)
+                                
+                                // Save mix state only once at the end of drag (throttled)
+                                let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
+                                StatePersistenceService.shared.saveLastActiveMix(activeTracks)
+                            }
+                    )
+                
+                // Filled track - visual only
+                // CRITICAL: Use displayVolume (actual track volume when not dragging)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                trackColor,
+                                trackColor.opacity(0.7)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: geometry.size.width * displayVolume, height: 6)
+                    .shadow(color: trackColor.opacity(0.5), radius: 6)
+                    .animation(isDraggingSlider ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: displayVolume)
+                    .allowsHitTesting(false)
+                
+                // Thumb - visual only
+                // CRITICAL: Use displayVolume (actual track volume when not dragging)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 20, height: 20)
+                    .shadow(color: trackColor.opacity(0.7), radius: 6)
+                    .overlay(
+                        Circle()
+                            .stroke(trackColor, lineWidth: 2)
+                    )
+                    .offset(x: geometry.size.width * displayVolume - 10)
+                    .animation(isDraggingSlider ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: currentVolume)
+                    .allowsHitTesting(false)
+            }
+            .frame(height: 20)
+        }
+        .frame(height: 20)
+    }
+}
+
+// Preference key for modal frame (if needed for future enhancements)
+struct ModalFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+// MARK: - Dock Sound Chip
+struct DockSoundChip: View {
+    let track: AudioTrack
+    @ObservedObject var audioManager: AudioManager
+    @Binding var soundsInVolumeMode: Set<UUID>
+    let availableHeight: CGFloat // Available screen height for movement
+    let isOverlay: Bool // Whether rendering in overlay (volume mode) or dock (normal)
+    let dockAnchor: CGPoint? // Anchor point in dock (for overlay positioning)
+    let onTap: () -> Void // Callback when tapped
+    
+    // Larger size for dock - more impactful
+    private let baseSize: CGFloat = 65
+    
+    private var trackColor: Color {
+        SoundColor.colorForTrack(track.name)
+    }
+    
+    private var isActive: Bool {
+        track.isActive
+    }
+    
+    private var volumeMultiplier: Double {
+        Double(track.volume)
+    }
+    
+    // Subtle colored glow around icon when active - soft halo effect
+    @ViewBuilder
+    private var iconGlow: some View {
+        if isActive {
+            // Soft colored halo around the icon area
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            trackColor.opacity(0.25 * volumeMultiplier),
+                            trackColor.opacity(0.1 * volumeMultiplier),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 15,
+                        endRadius: 35
+                    )
+                )
+                .frame(width: baseSize - 10, height: baseSize - 10)
+                .blur(radius: 8)
+        }
+    }
+    
+    @ViewBuilder
+    private var mainGlassCircle: some View {
+        ZStack {
+            // Base glass layer - clean and neutral
+            Circle()
+                .fill(.ultraThinMaterial)
+                .opacity(0.85)
+            
+            // Soft inner highlight for depth
+            Circle()
+                .fill(innerHighlightGradient)
+            
+            // Colored border ring when active - subtle accent
+            if isActive {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                trackColor.opacity(0.4 * volumeMultiplier),
+                                trackColor.opacity(0.25 * volumeMultiplier),
+                                trackColor.opacity(0.15 * volumeMultiplier)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            } else {
+                // Neutral border when inactive
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.2),
+                                Color.white.opacity(0.1),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.0
+                    )
+            }
+        }
+        .frame(width: baseSize, height: baseSize)
+        .clipShape(Circle())
+    }
+    
+    private var innerHighlightGradient: RadialGradient {
+        RadialGradient(
+            colors: [
+                Color.white.opacity(0.25),
+                Color.white.opacity(0.1),
+                Color.clear
+            ],
+            center: UnitPoint(x: 0.3, y: 0.3),
+            startRadius: 5,
+            endRadius: 25
+        )
+    }
+    
+    
+    // Soft colored shadow when active - subtle depth
+    @ViewBuilder
+    private var shadowLayer: some View {
+        Circle()
+            .fill(Color.clear)
+            .frame(width: baseSize, height: baseSize)
+            .shadow(
+                color: isActive ? trackColor.opacity(0.2 * volumeMultiplier) : Color.black.opacity(0.15),
+                radius: isActive ? 12 : 8,
+                x: 0,
+                y: isActive ? 4 : 2
+            )
+            .shadow(
+                color: Color.black.opacity(0.2),
+                radius: 6,
+                x: 0,
+                y: 2
+            )
+    }
+    
+    // Neutral icon - always white, never colored
+    @ViewBuilder
+    private var iconView: some View {
+        Image(systemName: track.icon)
+            .font(.system(size: 24, weight: .medium, design: .rounded))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.95),
+                        Color.white.opacity(0.85)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
+    }
+    
+    var body: some View {
+        ZStack {
+            // Colored glow halo around icon (when active)
+            iconGlow
+            
+            // Main glass circle with colored border ring
+            mainGlassCircle
+            
+            // Soft shadows for depth
+            shadowLayer
+            
+            // Neutral white icon
+            iconView
+        }
+        .frame(width: baseSize, height: baseSize)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.prepare()
+            impact.impactOccurred()
+            onTap()
+        }
+    }
+}
+
+// MARK: - Master Volume Slider
+struct MasterVolumeSlider: View {
+    @ObservedObject var audioManager: AudioManager
+    @State private var currentVolume: Double
+    @State private var isDraggingSlider = false
+    
+    init(audioManager: AudioManager) {
+        self.audioManager = audioManager
+        self._currentVolume = State(initialValue: audioManager.masterVolume)
+    }
+    
+    var body: some View {
+        HStack(spacing: AppSpacing.sm) {
+            // Minimal speaker icon
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.7))
+                .frame(width: 20, height: 20)
+            
+            // Minimal volume slider
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Track background - gesture target (full width and height for easier interaction)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.15))
+                        .frame(height: 3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Invisible hit area for easier interaction
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(height: 44) // Standard iOS tap target size
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    if !isDraggingSlider {
+                                        isDraggingSlider = true
+                                    }
+                                    let newX = max(0, min(geometry.size.width, value.location.x))
+                                    let newVolume = newX / geometry.size.width
+                                    
+                                    // Clamp volume to valid range
+                                    let clampedVolume = min(1.0, max(0.0, newVolume))
+                                    
+                                    // Update directly without animation during drag for immediate response
+                                    currentVolume = clampedVolume
+                                    
+                                    // Update volume with haptic feedback
+                                    audioManager.updateMasterVolume(clampedVolume)
+                                    
+                                    let oldMilestone = Int((value.startLocation.x / geometry.size.width) * 4)
+                                    let newMilestone = Int(clampedVolume * 4)
+                                    
+                                    if newMilestone != oldMilestone && newMilestone >= 0 && newMilestone <= 4 {
+                                        let intensity: UIImpactFeedbackGenerator.FeedbackStyle =
+                                            (newMilestone == 0 || newMilestone == 4) ? .medium : .light
+                                        let impact = UIImpactFeedbackGenerator(style: intensity)
+                                        impact.impactOccurred()
+                                    }
+                                }
+                                .onEnded { value in
+                                    isDraggingSlider = false
+                                    // Final volume is already set, just ensure smooth transition
+                                    let finalX = max(0, min(geometry.size.width, value.location.x))
+                                    let finalVolume = min(1.0, max(0.0, finalX / geometry.size.width))
+                                    currentVolume = finalVolume
+                                    audioManager.updateMasterVolume(finalVolume)
+                                }
+                        )
+                    
+                    // Filled track - visual only
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.5))
+                        .frame(width: geometry.size.width * currentVolume, height: 3)
+                        .animation(isDraggingSlider ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: currentVolume)
+                        .allowsHitTesting(false)
+                    
+                    // Custom thumb - visual only
+                    Circle()
+                        .fill(Color.white.opacity(0.9))
+                        .frame(width: 12, height: 12)
+                        .shadow(color: Color.white.opacity(0.3), radius: 3)
+                        .offset(x: geometry.size.width * currentVolume - 6)
+                        .animation(isDraggingSlider ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: currentVolume)
+                        .allowsHitTesting(false)
+                }
+                .frame(height: 44) // Taller frame for easier interaction
+            }
+            .frame(height: 44) // Taller frame for easier interaction
+            
+            // Minimal volume percentage
+            Text("\(Int(currentVolume * 100))")
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundColor(.white.opacity(0.7))
+                .frame(width: 30, alignment: .trailing)
+        }
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, AppSpacing.xs)
+        .onChange(of: audioManager.masterVolume) { _, newValue in
+            // Sync with external changes - animate smoothly when not dragging
+            if !isDraggingSlider {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    currentVolume = newValue
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Scroll Offset Preference Key
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// MARK: - Dock Element Position Preference Key
+struct DockElementPositionPreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGPoint] = [:]
+    static func reduce(value: inout [UUID: CGPoint], nextValue: () -> [UUID: CGPoint]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+// MARK: - Dock Frame Preference Key (for drop detection)
+struct DockFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+// MARK: - Grid Item Position Preference Key (for drag-to-dock)
+struct GridItemPositionPreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGPoint] = [:]
+    static func reduce(value: inout [UUID: CGPoint], nextValue: () -> [UUID: CGPoint]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+// MARK: - Helper Functions
+private func clamp<T: Comparable>(_ value: T, min: T, max: T) -> T {
+    return Swift.max(min, Swift.min(max, value))
+}
