@@ -41,8 +41,8 @@ struct ContentView: View {
                                 .tag(2)
                                 .ignoresSafeArea(.all)
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .indexViewStyle(.page(backgroundDisplayMode: .never))
+                        .tabViewStyle(.page(indexDisplayMode: .automatic))
+                        .indexViewStyle(.page(backgroundDisplayMode: .always))
                         .transition(.opacity)
                     } else {
                         // Show same background as loading screen during transition

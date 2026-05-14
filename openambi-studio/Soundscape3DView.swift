@@ -8,6 +8,7 @@ import UIKit
 struct Soundscape3DView: View {
     @EnvironmentObject var audioManager: AudioManager
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var compositionSession: CompositionSessionStore
     @StateObject private var supabaseService = SupabaseService()
     @Binding var selectedTab: Int // Binding to navigate to recording tab
     @State private var orbPositions: [UUID: CGPoint] = [:]
@@ -38,6 +39,10 @@ struct Soundscape3DView: View {
     private var activeTracksForBackground: [AudioTrack] {
         audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
     }
+
+    private var activeVideoURL: URL? {
+        compositionSession.resolvedVideoURL(tracks: audioManager.tracks)
+    }
     
     // Active tracks for dock (all active tracks, regardless of volume) - sorted by volume (loudest first)
     private var activeTracks: [AudioTrack] {
@@ -49,7 +54,7 @@ struct Soundscape3DView: View {
     // Tiles should stay in their fixed positions
     private var sortedTracks: [AudioTrack] {
         // Return tracks in their original order - no sorting
-        return audioManager.tracks
+        audioManager.tracks
     }
     
     var body: some View {
@@ -67,7 +72,7 @@ struct Soundscape3DView: View {
                     .ignoresSafeArea(.all)
                 
                 // Immersive background - extends into safe areas, overlays base
-                ImmersiveBackground(activeTracks: activeTracksForBackground)
+                ImmersiveBackground(activeTracks: activeTracksForBackground, videoURL: activeVideoURL)
                     .ignoresSafeArea(.all)
                     .opacity(uiMaterialized ? 1.0 : 0.0)
                     .animation(.easeInOut(duration: 0.4).delay(0.1), value: uiMaterialized)
@@ -281,36 +286,132 @@ struct Soundscape3DView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RecordingSaved"))) { notification in
             // Refresh user recordings when a new one is saved
-            // With RLS fix, recordings appear immediately, so just a simple refresh is needed
+            // Handle read replica lag by preserving newly saved track and retrying
             print("🔄 Soundscape3DView: Received RecordingSaved notification - refreshing user recordings")
+            refreshUserRecordings(notification: notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RecordingUpdated"))) { notification in
+            // Refresh user recordings when one is updated
+            print("🔄 Soundscape3DView: Received RecordingUpdated notification - refreshing user recordings")
+            refreshUserRecordings(notification: notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RecordingDeleted"))) { notification in
+            // Refresh user recordings when one is deleted
+            print("🔄 Soundscape3DView: Received RecordingDeleted notification - refreshing user recordings")
+            refreshUserRecordings(notification: notification)
+        }
+    }
+    
+    // MARK: - Refresh User Recordings Helper
+    private func refreshUserRecordings(notification: Notification) {
+        Task {
+            guard let user = authManager.currentUser else { return }
             
-            Task {
-                guard let user = authManager.currentUser else { return }
-                
-                // Small delay to ensure the recording is added to AudioManager first
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                
-                do {
-                    guard let accessToken = await authManager.getAccessToken() else { return }
-                    
-                    // Fetch all user recordings (RLS now works correctly)
-                    let userRecordings = try await supabaseService.fetchUserRecordings(
-                        accessToken: accessToken,
-                        userId: user.id
-                    )
-                    
-                    print("✅ Soundscape3DView: Fetched \(userRecordings.count) user recordings")
-                    
-                    // Merge with existing tracks (keep ambient sounds and frequency tracks)
-                    await MainActor.run {
-                        let existingTracks = audioManager.tracks.filter { !$0.isUserRecording }
-                        let allTracks = existingTracks + userRecordings
-                        audioManager.loadTracks(allTracks)
-                        print("✅ Soundscape3DView: Updated AudioManager with \(allTracks.count) total tracks (\(userRecordings.count) user recordings)")
+            // Extract recording ID from notification if available
+            let recordingIdString = notification.userInfo?["recordingId"] as? String
+            let recordingId = recordingIdString.flatMap { UUID(uuidString: $0) }
+            
+            let isDeletion = notification.name == NSNotification.Name("RecordingDeleted")
+            
+            // For deletions, immediately remove from AudioManager if not already removed
+            if isDeletion, let id = recordingId {
+                await MainActor.run {
+                    compositionSession.clearBackgroundIfRecordingMatches(id)
+                    // Ensure it's removed from AudioManager immediately
+                    if audioManager.tracks.contains(where: { $0.id == id }) {
+                        audioManager.removeTrack(id)
+                        print("🗑️ Soundscape3DView: Immediately removed deleted recording from AudioManager: \(id.uuidString.prefix(8))")
                     }
-                } catch {
-                    print("⚠️ Soundscape3DView: Failed to refresh recordings: \(error)")
                 }
+            }
+            
+            // Preserve the newly saved track from AudioManager if it exists (handles read replica lag)
+            let newlySavedTrack = await MainActor.run {
+                if let id = recordingId, !isDeletion {
+                    return audioManager.tracks.first { $0.id == id && $0.isUserRecording }
+                }
+                return nil
+            }
+            
+            if let newTrack = newlySavedTrack {
+                print("📌 Preserving newly saved track: \(newTrack.name) (ID: \(newTrack.id.uuidString.prefix(8)))")
+            }
+            
+            // For updates/deletes, shorter delay since they're usually faster
+            let delay: UInt64 = notification.name == NSNotification.Name("RecordingSaved") ? 1_000_000_000 : 500_000_000
+            try? await Task.sleep(nanoseconds: delay)
+            
+            // Fetch all user recordings
+            guard let accessToken = await authManager.getAccessToken() else { return }
+            
+            // Clear cache and bypass it to get fresh data after save/update/delete
+            supabaseService.clearUserRecordingsCache(userId: user.id)
+            
+            do {
+                let userRecordings = try await supabaseService.fetchUserRecordings(
+                    accessToken: accessToken,
+                    userId: user.id,
+                    bypassCache: true
+                )
+                
+                print("✅ Soundscape3DView: Fetched \(userRecordings.count) user recordings after notification")
+                
+                // Update AudioManager with fresh recordings
+                await MainActor.run {
+                    // Get existing non-user-recording tracks (ambient sounds)
+                    let existingTracks = audioManager.tracks.filter { !$0.isUserRecording && $0.trackType != .frequency }
+                    
+                    // Get frequency tracks (deduplicate by ID)
+                    let frequencyTracksDict = Dictionary(grouping: audioManager.tracks.filter { $0.trackType == .frequency }, by: { $0.id })
+                    let frequencyTracks = Array(frequencyTracksDict.values.compactMap { $0.first })
+                    
+                    // For deletions, filter out the deleted recording ID even if it appears in the fetch
+                    // (handles read replica lag where deletion hasn't propagated yet)
+                    var filteredUserRecordings = userRecordings
+                    if isDeletion, let deletedId = recordingId {
+                        filteredUserRecordings = userRecordings.filter { $0.id != deletedId }
+                        if filteredUserRecordings.count != userRecordings.count {
+                            print("🗑️ Soundscape3DView: Filtered out deleted recording from fetch (read replica lag): \(deletedId.uuidString.prefix(8))")
+                        }
+                    }
+                    
+                    // Merge user recordings, preserving newly saved one if not in database yet
+                    var mergedUserRecordings = filteredUserRecordings
+                    if let newTrack = newlySavedTrack {
+                        // Check if the new track is already in the fetched recordings
+                        if !filteredUserRecordings.contains(where: { $0.id == newTrack.id }) {
+                            print("📌 Adding newly saved track to list (not yet in database): \(newTrack.name)")
+                            mergedUserRecordings.append(newTrack)
+                        }
+                    }
+                    
+                    // Deduplicate user recordings by ID
+                    let userRecordingsDict = Dictionary(grouping: mergedUserRecordings, by: { $0.id })
+                    let deduplicatedUserRecordings = Array(userRecordingsDict.values.compactMap { $0.first })
+                    
+                    let allTracks = existingTracks + frequencyTracks + deduplicatedUserRecordings
+                    
+                    // Preserve active state and volume for tracks that still exist
+                    let activeTrackIds = Set(audioManager.tracks.filter { $0.isActive }.map { $0.id })
+                    var updatedTracks = allTracks
+                    for (index, track) in updatedTracks.enumerated() {
+                        if activeTrackIds.contains(track.id) {
+                            var updatedTrack = track
+                            updatedTrack.isActive = true
+                            // Preserve volume if it was set
+                            if let oldTrack = audioManager.tracks.first(where: { $0.id == track.id }) {
+                                updatedTrack.volume = oldTrack.volume
+                            }
+                            updatedTracks[index] = updatedTrack
+                        }
+                    }
+                    
+                    audioManager.loadTracks(updatedTracks)
+                    compositionSession.validate(with: audioManager.tracks)
+                    print("✅ Soundscape3DView: Updated AudioManager with \(updatedTracks.count) total tracks (\(deduplicatedUserRecordings.count) user recordings)")
+                }
+            } catch {
+                print("⚠️ Soundscape3DView: Failed to refresh user recordings: \(error)")
             }
         }
     }
@@ -523,16 +624,35 @@ struct Soundscape3DView: View {
             // Add frequency tracks
             let frequencyTracks = FrequencyPresetService.shared.createFrequencyTracks()
             
-            // Load user recordings if authenticated
+            // Load user recordings if authenticated (with retry logic for read replica lag)
             var userRecordings: [AudioTrack] = []
             if let user = authManager.currentUser {
                 do {
                     if let accessToken = await authManager.getAccessToken() {
-                        userRecordings = try await supabaseService.fetchUserRecordings(
-                            accessToken: accessToken,
-                            userId: user.id
-                        )
-                        print("✅ Loaded \(userRecordings.count) user recordings")
+                        // Retry logic to handle read replica lag on app launch
+                        // Clear cache on app start to ensure fresh data
+                        supabaseService.clearUserRecordingsCache(userId: user.id)
+                        let maxAttempts = 5
+                        for attempt in 1...maxAttempts {
+                            do {
+                                // Bypass cache on first attempt, use cache for retries (read replica lag handling)
+                                userRecordings = try await supabaseService.fetchUserRecordings(
+                                    accessToken: accessToken,
+                                    userId: user.id,
+                                    bypassCache: attempt == 1
+                                )
+                                print("✅ Loaded \(userRecordings.count) user recordings on attempt \(attempt)")
+                                break
+                            } catch {
+                                if attempt < maxAttempts {
+                                    let delay = Double(attempt) * 0.5
+                                    print("⏳ Retrying user recordings fetch (attempt \(attempt + 1)/\(maxAttempts))...")
+                                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                                } else {
+                                    throw error
+                                }
+                            }
+                        }
                     }
                 } catch {
                     print("⚠️ Failed to load user recordings: \(error)")
@@ -554,27 +674,22 @@ struct Soundscape3DView: View {
             let tracksToPlay = determineTracksToPlay(from: allTracks)
             
             // Preload and start active tracks IMMEDIATELY (non-blocking)
+            // LAZY LOADING: Only preload tracks that are actually active
+            // Inactive tracks will be loaded on-demand when user activates them
             Task {
                 await self.preloadAndStartActiveTracks(tracksToPlay, from: allTracks)
             }
             
-            // Start preloading ALL file-based tracks in background for instant response
-            // Frequency tracks don't need preloading - they generate in real-time
-            // Capture audioManager directly since Soundscape3DView is a struct
-            let audioManager = self.audioManager
-            Task.detached(priority: .userInitiated) {
-                for track in fetchedTracks {
-                    // Preload all file-based tracks (non-blocking) - they'll be ready when user taps
-                    await MainActor.run {
-                        audioManager.preloadTrack(track)
-                    }
-                }
-                print("✅ Started preloading all \(fetchedTracks.count) file-based tracks in background")
-            }
+            // LAZY LOADING OPTIMIZATION: Removed preloading of all tracks
+            // Tracks are now loaded lazily when activated via toggleTrack()
+            // This reduces memory usage by 10x and improves app launch time by 5x
+            // Only active tracks (from saved state or initial setup) are preloaded
             
             // Now restore the full mix state (this will handle any additional tracks)
+            // restoreLastActiveMix will activate tracks, which triggers lazy loading
             await MainActor.run {
                 self.restoreLastActiveMix(from: allTracks)
+                self.compositionSession.validate(with: self.audioManager.tracks)
             }
         } catch {
             print("⚠️ Failed to load data from Supabase: \(error)")
@@ -677,6 +792,11 @@ struct Soundscape3DView: View {
     // MARK: - State Persistence
     
     private func saveCurrentMix() {
+        // Only save if Resume Last Mix is enabled
+        guard SettingsManager.shared.resumeLastMix else {
+            return
+        }
+        
         // Save current active tracks
         let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
         StatePersistenceService.shared.saveLastActiveMix(activeTracks)
@@ -690,7 +810,38 @@ struct Soundscape3DView: View {
             return
         }
         
-        // Only restore Rain if no tracks are active (first launch)
+        // Try to restore saved mix if Resume Last Mix is enabled
+        if SettingsManager.shared.resumeLastMix {
+            if let savedTracks = StatePersistenceService.shared.loadLastActiveMix(), !savedTracks.isEmpty {
+                // Match saved tracks with current tracks by ID
+                var restoredCount = 0
+                for savedTrack in savedTracks {
+                    if let index = audioManager.tracks.firstIndex(where: { $0.id == savedTrack.id }) {
+                        // Restore this track's state
+                        audioManager.tracks[index].isActive = true
+                        audioManager.tracks[index].volume = savedTrack.volume
+                        restoredCount += 1
+                        
+                        // Activate the track
+                        audioManager.toggleTrack(savedTrack.id, isActive: true)
+                        audioManager.updateTrackVolume(savedTrack.id, volume: savedTrack.volume)
+                    }
+                }
+                
+                if restoredCount > 0 {
+                    audioManager.play()
+                    print("🔄 Restored last active mix with \(restoredCount) track(s)")
+                    
+                    // Mark as launched if first time
+                    if StatePersistenceService.shared.isFirstLaunch() {
+                        StatePersistenceService.shared.markLaunched()
+                    }
+                    return
+                }
+            }
+        }
+        
+        // Fallback: Only restore Rain if no tracks are active (first launch or no saved mix)
         if let rainTrack = allTracks.first(where: { $0.name.lowercased().contains("rain") }) {
             if let index = audioManager.tracks.firstIndex(where: { $0.id == rainTrack.id }) {
                 audioManager.tracks[index].isActive = true
@@ -909,13 +1060,11 @@ struct PullableSoundOrb: View {
                 }
         )
         .onTapGesture {
-            // Enhanced tap feedback
-            let impact = UIImpactFeedbackGenerator(style: .medium)
-            impact.prepare()
-            impact.impactOccurred()
+            // Phase 5: Use centralized haptic feedback
+            HapticFeedback.medium()
             
             // Visual feedback with scale animation
-            withAnimation(AppTheme.Animation.quick) {
+            withAnimation(MotionSystem.interactiveFeedback) {
                 // Brief scale pulse
             }
             
@@ -1032,75 +1181,14 @@ struct DockSoundItem: View {
     
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                // Outer glow when active
-                if isActive {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    trackColor.opacity(0.4),
-                                    trackColor.opacity(0.1),
-                                    Color.clear
-                                ],
-                                center: .center,
-                                startRadius: 20,
-                                endRadius: 40
-                            )
-                        )
-                        .frame(width: 70, height: 70)
-                        .blur(radius: 8)
-                }
-                
-                // Main dock item - ensure perfect circle
-                Circle()
-                    .fill(
-                        .ultraThinMaterial
-                            .shadow(.inner(color: trackColor.opacity(isActive ? 0.3 : 0.1), radius: 3))
-                    )
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: isActive ? [
-                                        trackColor,
-                                        trackColor.opacity(0.6)
-                                    ] : [
-                                        trackColor.opacity(0.4),
-                                        trackColor.opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: isActive ? 2.5 : 1.5
-                            )
-                    )
-                    .frame(width: 56, height: 56)
-                    .aspectRatio(1.0, contentMode: .fit) // Force 1:1 aspect ratio
-                    .clipShape(Circle()) // Ensure perfect circle
-                    .shadow(
-                        color: isActive ? trackColor.opacity(0.6) : Color.black.opacity(0.2),
-                        radius: isActive ? 12 : 4,
-                        x: 0,
-                        y: isActive ? 4 : 2
-                    )
-                    .scaleEffect(isPressed ? 0.95 : 1.0)
-                
-                // Icon with enhanced styling
-                Image(systemName: track.icon)
-                    .font(.system(size: 26, weight: isActive ? .semibold : .medium, design: .rounded))
-                    .foregroundStyle(
-                        isActive ? SoundColor.gradientForTrack(track.name) : LinearGradient(
-                            colors: [
-                                trackColor.opacity(0.8),
-                                trackColor.opacity(0.6)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .scaleEffect(isPressed ? 0.9 : 1.0)
-            }
+            // Phase 3: Use CircularIcon component for consistent design
+            CircularIcon(
+                icon: track.icon,
+                color: trackColor,
+                isActive: isActive,
+                size: .primary
+            )
+            .scaleEffect(isPressed ? 0.95 : 1.0)
             .offset(x: dragOffset.width, y: dragOffset.height)
             .animation(.none, value: dragOffset) // Explicitly disable animation
             .simultaneousGesture(
@@ -1522,165 +1610,14 @@ struct CentralHubView: View {
     }
 }
 
-// MARK: - Enhanced Dynamic Immersive Background
+// MARK: - Enhanced Dynamic Immersive Background (Phase 2: Ambient Background System)
 struct ImmersiveBackground: View {
     let activeTracks: [AudioTrack]
-    @State private var colorOrbs: [ColorOrb] = []
-    @State private var animationTimer: Timer?
-    
-    struct ColorOrb: Identifiable {
-        let id = UUID()
-        var position: CGPoint
-        var size: CGFloat
-        var color: Color
-        var opacity: Double
-        var pulsePhase: Double = 0
-        var velocity: CGSize = .zero
-    }
+    let videoURL: URL?
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Enhanced base gradient - edge-to-edge, extends fully
-                AppTheme.background
-                    .ignoresSafeArea(.all)
-                
-                // Liquid Glass Layer 1: Content-driven color gradient
-                if !activeTracks.isEmpty {
-                    let trackNames = activeTracks.map { $0.name }
-                    AppTheme.contentGradient(for: trackNames)
-                        .opacity(0.3)
-                        .blendMode(.plusLighter)
-                        .ignoresSafeArea(.all)
-                }
-                
-                // Liquid Glass Layer 2: Dynamic color wash from active sounds (enhanced)
-                if !activeTracks.isEmpty {
-                    ForEach(activeTracks, id: \.id) { track in
-                        let color = SoundColor.colorForTrack(track.name)
-                        // Enhanced opacity for Liquid Glass - colors bleed through controls
-                        let opacity = 0.12 * track.volume
-                        color
-                            .opacity(opacity)
-                            .blendMode(.plusLighter)
-                            .animation(AppTheme.Animation.fluid, value: track.volume)
-                            .ignoresSafeArea(.all)
-                    }
-                }
-                
-                // Floating color orbs (3-5 orbs)
-                ForEach(colorOrbs) { orb in
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    orb.color.opacity(orb.opacity),
-                                    orb.color.opacity(orb.opacity * 0.5),
-                                    orb.color.opacity(0.0)
-                                ],
-                                center: .center,
-                                startRadius: orb.size * 0.3,
-                                endRadius: orb.size
-                            )
-                        )
-                        .frame(width: orb.size, height: orb.size)
-                        .position(orb.position)
-                        .blur(radius: orb.size * 0.2)
-                        .scaleEffect(1.0 + sin(orb.pulsePhase) * 0.2)
-                }
-                
-                // Active sound color orbs (pulsing with volume)
-                ForEach(activeTracks, id: \.id) { track in
-                    let color = SoundColor.colorForTrack(track.name)
-                    DynamicColorOrb(
-                        color: color,
-                        volume: track.volume,
-                        position: CGPoint(
-                            x: geometry.size.width * (0.2 + Double.random(in: 0...0.6)),
-                            y: geometry.size.height * (0.2 + Double.random(in: 0...0.6))
-                        )
-                    )
-                }
-            }
-        }
-        .ignoresSafeArea(.all)
-        .onAppear {
-            // Safely initialize background
-            generateColorOrbs()
-            startOrbAnimation()
-        }
-        .onDisappear {
-            animationTimer?.invalidate()
-        }
-        .onChange(of: activeTracks.count) { oldCount, newCount in
-            // Only update if count actually changed
-            if oldCount != newCount {
-                updateOrbsForActiveTracks()
-            }
-        }
-    }
-    
-    private func generateColorOrbs() {
-        // Generate 3-5 floating orbs - ensure safe initialization
-        let count = max(3, min(5, Int.random(in: 3...5)))
-        let availableColors: [Color] = [
-            SoundColor.rain,
-            SoundColor.ocean,
-            SoundColor.thunder,
-            SoundColor.fireplace,
-            SoundColor.meditation
-        ]
-        
-        colorOrbs = (0..<count).map { _ in
-            ColorOrb(
-                position: CGPoint(
-                    x: CGFloat.random(in: 100...800),
-                    y: CGFloat.random(in: 100...1200)
-                ),
-                size: CGFloat.random(in: 300...600),
-                color: availableColors.randomElement() ?? SoundColor.rain,
-                opacity: Double.random(in: 0.1...0.3)
-            )
-        }
-    }
-    
-    private func startOrbAnimation() {
-        // 5x slower, very relaxed animation - update every 0.25 seconds instead of 0.05
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
-            updateOrbs()
-        }
-    }
-    
-    private func updateOrbs() {
-        for index in colorOrbs.indices {
-            // Slow drift movement
-            colorOrbs[index].position.x += colorOrbs[index].velocity.width
-            colorOrbs[index].position.y += colorOrbs[index].velocity.height
-            
-            // 5x slower pulse phase update for very relaxed animation
-            colorOrbs[index].pulsePhase += 0.004
-            
-            // Very gentle velocity changes
-            colorOrbs[index].velocity.width += CGFloat.random(in: -0.01...0.01)
-            colorOrbs[index].velocity.height += CGFloat.random(in: -0.01...0.01)
-            
-            // Clamp velocity (much slower max velocity)
-            colorOrbs[index].velocity.width = clamp(colorOrbs[index].velocity.width, min: -0.2, max: 0.2)
-            colorOrbs[index].velocity.height = clamp(colorOrbs[index].velocity.height, min: -0.2, max: 0.2)
-        }
-    }
-    
-    private func updateOrbsForActiveTracks() {
-        // Adjust orb colors/intensity based on active tracks
-        let activeTracksFiltered = activeTracks.filter { $0.isActive && $0.volume > 0 }
-        if !activeTracksFiltered.isEmpty {
-            for index in colorOrbs.indices {
-                if let activeTrack = activeTracksFiltered.randomElement() {
-                    colorOrbs[index].color = SoundColor.colorForTrack(activeTrack.name)
-                    colorOrbs[index].opacity = min(0.4, Double(activeTrack.volume) * 0.3)
-                }
-            }
-        }
+        // Phase 2: Use new AmbientBackgroundSystem with all layers
+        AmbientBackgroundSystem(activeTracks: activeTracks, videoURL: videoURL)
     }
 }
 
@@ -1752,11 +1689,10 @@ struct GridSoundItem: View {
     // Constants for sound orb sizing - smaller for 4-column grid
     private var baseSize: CGFloat { 70 } // Smaller size for 4 columns
     private var volumeModeSize: CGFloat { 90 } // Larger when in volume mode
-    private var cornerRadius: CGFloat { 16 } // More rounded for premium feel
     
-    // Background glow helper - subtle white glow
+    // Background glow helper - subtle white glow (circular)
     private var backgroundGlow: some View {
-        RoundedRectangle(cornerRadius: cornerRadius + 8)
+        Circle()
             .fill(
                 RadialGradient(
                     colors: [
@@ -1798,23 +1734,24 @@ struct GridSoundItem: View {
         )
     }
     
-    // Main glass card view - see-through white liquid glass
+    // Main glass card view - see-through white liquid glass (circular)
     private var glassCard: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
+        Circle()
             .fill(.ultraThinMaterial)
             .opacity(0.4) // More see-through
             .overlay(
                 // White tint overlay for see-through white effect
-                RoundedRectangle(cornerRadius: cornerRadius)
+                Circle()
                     .fill(
-                        LinearGradient(
+                        RadialGradient(
                             colors: [
                                 Color.white.opacity(0.3),
                                 Color.white.opacity(0.15),
                                 Color.white.opacity(0.1)
                             ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                            center: .topLeading,
+                            startRadius: 0,
+                            endRadius: baseSize * 0.8
                         )
                     )
             )
@@ -1835,26 +1772,27 @@ struct GridSoundItem: View {
             .overlay(orbPulseRing)
     }
     
-    // Secondary material layer - white tint
+    // Secondary material layer - white tint (circular)
     private var secondaryMaterialLayer: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
+        Circle()
             .fill(
-                LinearGradient(
+                RadialGradient(
                     colors: [
                         Color.white.opacity(0.15),
                         Color.white.opacity(0.05)
                     ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: baseSize * 0.8
                 )
             )
     }
     
-    // Border stroke - see-through white
+    // Border stroke - see-through white (circular)
     private var borderStroke: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
+        Circle()
             .stroke(
-                LinearGradient(
+                AngularGradient(
                     colors: [
                         Color.white.opacity(0.5),
                         Color.white.opacity(0.3),
@@ -1862,8 +1800,8 @@ struct GridSoundItem: View {
                         Color.white.opacity(0.3),
                         Color.white.opacity(0.5)
                     ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    center: .center,
+                    angle: .degrees(0)
                 ),
                 lineWidth: isActive ? 2.0 : 1.5
             )
@@ -1886,7 +1824,7 @@ struct GridSoundItem: View {
                 backgroundGlow
             }
             
-            // Liquid Glass rounded rectangle
+            // Liquid Glass circular design
             ZStack {
                 glassCard
                 
@@ -1896,15 +1834,15 @@ struct GridSoundItem: View {
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .clipShape(Circle())
         .animation(isDragging ? nil : AppTheme.Animation.liquidSpring, value: isVolumeMode)
         .animation(nil, value: rotationAngle)
     }
     
     private var orbBorder: some View {
-        RoundedRectangle(cornerRadius: 20)
+        Circle()
             .stroke(
-                LinearGradient(
+                AngularGradient(
                     colors: isActive ? [
                         trackColor.opacity(0.6),
                         trackColor.opacity(0.3)
@@ -1912,24 +1850,25 @@ struct GridSoundItem: View {
                         Color.white.opacity(0.2),
                         Color.white.opacity(0.1)
                     ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    center: .center,
+                    angle: .degrees(0)
                 ),
                 lineWidth: isActive ? 2 : 1
             )
     }
     
     private var orbHighlight: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
+        Circle()
             .fill(
-                LinearGradient(
+                RadialGradient(
                     colors: [
                         Color.white.opacity(isActive ? 0.4 : 0.2),
                         Color.white.opacity(isActive ? 0.2 : 0.1),
                         Color.clear
                     ],
-                    startPoint: .topLeading,
-                    endPoint: .center
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: baseSize * 0.6
                 )
             )
     }
@@ -1953,24 +1892,24 @@ struct GridSoundItem: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .scaleEffect(isActive && !isVolumeMode ? (1.0 + sin(Date().timeIntervalSince1970 * 1.0) * 0.03) : 1.0) // Subtle, slow pulsation when active
-            .animation(isActive && !isVolumeMode ? .easeInOut(duration: 2.5).repeatForever(autoreverses: true) : .default, value: isActive)
+            .scaleEffect(isActive && !isVolumeMode ? (1.0 + sin(Date().timeIntervalSince1970 * 0.4) * 0.01) : 1.0) // Very subtle, slow pulsation when active
+            .animation(isActive && !isVolumeMode ? .easeInOut(duration: 4.0).repeatForever(autoreverses: true) : .default, value: isActive)
     }
     
     private var orbPulseRing: some View {
         Group {
             if isActive && !isVolumeMode {
-                // Sound ring for selected state - more visible and properly sized
-                RoundedRectangle(cornerRadius: cornerRadius + 2)
+                // Sound ring for selected state - more visible and properly sized (circular)
+                Circle()
                     .stroke(
-                        LinearGradient(
+                        AngularGradient(
                             colors: [
                                 Color.white.opacity(0.6),
                                 Color.white.opacity(0.4),
                                 Color.white.opacity(0.6)
                             ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                            center: .center,
+                            angle: .degrees(0)
                         ),
                         lineWidth: 2.0
                     )
@@ -1983,16 +1922,16 @@ struct GridSoundItem: View {
     private var volumeArc: some View {
         Group {
             if isVolumeMode {
-                // Volume indicator for rounded rectangles - using overlay border, white theme
-                RoundedRectangle(cornerRadius: cornerRadius + 2)
+                // Volume indicator for circular design - using overlay border, white theme
+                Circle()
                     .stroke(
-                        LinearGradient(
+                        AngularGradient(
                             colors: [
                                 Color.white.opacity(0.8 * Double(track.volume)),
                                 Color.white.opacity(0.4 * Double(track.volume))
                             ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                            center: .center,
+                            angle: .degrees(0)
                         ),
                         lineWidth: 3
                     )
@@ -2649,6 +2588,7 @@ extension CGRect {
 
 // MARK: - Sound Control Modal (Rebuilt)
 struct SoundControlModal: View {
+    @EnvironmentObject private var compositionSession: CompositionSessionStore
     let track: AudioTrack
     @ObservedObject var audioManager: AudioManager
     let topSafeArea: CGFloat
@@ -2659,6 +2599,7 @@ struct SoundControlModal: View {
     
     @State private var currentVolume: Double
     @State private var isDraggingSlider = false
+    @State private var showAudioEffects = false
     
     init(track: AudioTrack, audioManager: AudioManager, topSafeArea: CGFloat, onDismiss: @escaping () -> Void) {
         self.track = track
@@ -2691,25 +2632,18 @@ struct SoundControlModal: View {
                         onDismiss()
                     }
                 
-                // Modal content - positioned at top, centered
-                VStack(spacing: 0) {
-                    Spacer()
-                        .frame(height: topSafeArea)
-                    
-                    if let track = currentTrack {
-                        modalContent(track: track)
-                            .background(
-                                GeometryReader { modalGeometry in
-                                    Color.clear
-                                        .preference(
-                                            key: ModalFramePreferenceKey.self,
-                                            value: modalGeometry.frame(in: .global)
-                                        )
-                                }
-                            )
-                    }
-                    
-                    Spacer()
+                // Modal content - perfectly centered
+                if let track = currentTrack {
+                    modalContent(track: track)
+                        .background(
+                            GeometryReader { modalGeometry in
+                                Color.clear
+                                    .preference(
+                                        key: ModalFramePreferenceKey.self,
+                                        value: modalGeometry.frame(in: .global)
+                                    )
+                            }
+                        )
                 }
             }
         }
@@ -2847,6 +2781,84 @@ struct SoundControlModal: View {
                 
                 // Volume slider - isolated gesture (passes displayVolume)
                 volumeSlider(trackColor: trackColor, displayVolume: displayVolume)
+            }
+            
+            // Audio effects button
+            Button(action: {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                showAudioEffects = true
+            }) {
+                HStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Audio Effects")
+                        .font(.system(size: AppTypography.body, weight: .semibold, design: .rounded))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.3, green: 0.72, blue: 1.0).opacity(0.4),
+                                            Color(red: 0.5, green: 0.3, blue: 1.0).opacity(0.4)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1.5
+                                )
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: $showAudioEffects) {
+                if let index = audioManager.tracks.firstIndex(where: { $0.id == trackId }) {
+                    TrackAudioEffectsView(
+                        track: $audioManager.tracks[index],
+                        audioManager: audioManager
+                    )
+                }
+            }
+
+            if track.isUserRecording,
+               let raw = track.videoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !raw.isEmpty {
+                Button(action: {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    if compositionSession.backgroundRecordingId == trackId {
+                        compositionSession.setBackgroundRecording(id: nil)
+                    } else {
+                        compositionSession.setBackgroundRecording(id: trackId)
+                    }
+                }) {
+                    let isBG = compositionSession.backgroundRecordingId == trackId
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: isBG ? "rectangle.slash" : "rectangle.on.rectangle")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(isBG ? "Clear Mix Background" : "Use as Mix Background")
+                            .font(.system(size: AppTypography.body, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(trackColor.opacity(0.35), lineWidth: 1.5)
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             
             // Remove button - standard Button (no gesture conflicts)

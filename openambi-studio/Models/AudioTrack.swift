@@ -46,6 +46,17 @@ struct AudioTrack: Identifiable, Codable, Equatable {
     let icon: String
     let description: String?
     let audioUrl: String
+    var videoUrl: String? = nil
+    
+    // Advanced audio rendering
+    var useAdvancedRendering: Bool = false
+    var spatialX: Float = 0       // -1 (left) to 1 (right)
+    var spatialY: Float = 0       // -1 (back) to 1 (front)
+    var reverbMix: Float = 0      // 0 (dry) to 1 (full wet)
+    var eqLowGain: Float = 0      // dB
+    var eqMidGain: Float = 0      // dB
+    var eqHighGain: Float = 0     // dB
+    
     let trackType: TrackType
     var frequencyPreset: FrequencyPreset?  // Optional: for frequency tracks
     var isActive: Bool
@@ -80,6 +91,7 @@ struct AudioTrack: Identifiable, Codable, Equatable {
         icon: String,
         description: String? = nil,
         audioUrl: String,
+        videoUrl: String? = nil,
         trackType: TrackType = .audioFile,
         frequencyPreset: FrequencyPreset? = nil,
         isActive: Bool = false,
@@ -101,6 +113,7 @@ struct AudioTrack: Identifiable, Codable, Equatable {
         self.icon = icon
         self.description = description
         self.audioUrl = audioUrl
+        self.videoUrl = videoUrl
         self.trackType = trackType
         self.frequencyPreset = frequencyPreset
         self.isActive = isActive

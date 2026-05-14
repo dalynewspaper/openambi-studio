@@ -9,6 +9,7 @@ struct User: Identifiable, Codable {
     let email: String?
     let fullName: String?
     let displayName: String?
+    let username: String?
     let photoURL: String?
     let createdAt: Date?
     
@@ -17,6 +18,7 @@ struct User: Identifiable, Codable {
         case email
         case fullName = "full_name"
         case displayName = "display_name"
+        case username
         case photoURL = "photo_url"
         case createdAt = "created_at"
     }
@@ -26,6 +28,7 @@ struct User: Identifiable, Codable {
         email = try? container.decode(String.self, forKey: .email)
         fullName = try? container.decode(String.self, forKey: .fullName)
         displayName = try? container.decode(String.self, forKey: .displayName)
+        username = try? container.decode(String.self, forKey: .username)
         photoURL = try? container.decode(String.self, forKey: .photoURL)
         
         // Handle UUID as string from Supabase
@@ -48,11 +51,12 @@ struct User: Identifiable, Codable {
     }
     
     // Regular initializer for creating User instances
-    init(id: UUID, email: String?, fullName: String?, displayName: String?, photoURL: String?, createdAt: Date?) {
+    init(id: UUID, email: String?, fullName: String?, displayName: String?, username: String?, photoURL: String?, createdAt: Date?) {
         self.id = id
         self.email = email
         self.fullName = fullName
         self.displayName = displayName
+        self.username = username
         self.photoURL = photoURL
         self.createdAt = createdAt
     }
@@ -90,6 +94,10 @@ class AuthManager: NSObject, ObservableObject {
     
     // MARK: - Handle Apple ID Credential (called from AuthenticationView)
     func handleAppleIDCredential(_ credential: ASAuthorizationAppleIDCredential) async {
+        print("🎯 Processing Apple ID credential...")
+        print("   User ID: \(credential.user)")
+        print("   Email: \(credential.email ?? "nil")")
+        print("   Full Name: \(credential.fullName?.givenName ?? "nil") \(credential.fullName?.familyName ?? "nil")")
         await processAppleIDCredential(credential)
     }
     
@@ -218,17 +226,23 @@ class AuthManager: NSObject, ObservableObject {
     
     // MARK: - Process Apple ID Credential (private helper)
     private func processAppleIDCredential(_ credential: ASAuthorizationAppleIDCredential) async {
+        print("🔐 Processing Apple ID credential for authentication...")
+        
         // Get identity token
         guard let identityTokenData = credential.identityToken,
               let identityToken = String(data: identityTokenData, encoding: .utf8) else {
+            print("❌ Failed to get identity token from credential")
             await MainActor.run {
-                errorMessage = "Failed to get identity token"
+                errorMessage = "Failed to get identity token from Apple. Please try again."
                 isLoading = false
             }
             return
         }
         
+        print("✅ Identity token received (length: \(identityToken.count) characters)")
+        
         // Exchange with Supabase
+        print("🌐 Exchanging identity token with Supabase...")
         let url = URL(string: "\(supabaseUrl)/auth/v1/token?grant_type=id_token")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -243,15 +257,23 @@ class AuthManager: NSObject, ObservableObject {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
         do {
+            print("📤 Sending request to Supabase auth endpoint...")
             let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid response type from Supabase")
                 throw AuthError.invalidResponse
             }
+            
+            print("📥 Received response: Status \(httpResponse.statusCode)")
             
             guard (200...299).contains(httpResponse.statusCode) else {
                 let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 var errorMsg = errorData?["error_description"] as? String ?? errorData?["msg"] as? String ?? "Apple Sign In failed"
+                
+                print("❌ Supabase authentication failed: \(errorMsg)")
+                print("   Status code: \(httpResponse.statusCode)")
+                print("   Response data: \(String(data: data, encoding: .utf8) ?? "nil")")
                 
                 // Provide helpful error messages
                 if errorMsg.contains("missing OAuth secret") || errorMsg.contains("Unsupported provider") {
@@ -261,36 +283,57 @@ class AuthManager: NSObject, ObservableObject {
                 throw AuthError.oauthFailed(errorMsg)
             }
             
+            print("✅ Supabase authentication successful")
+            
             let authResponse = try JSONDecoder().decode(AuthResponse.self, from: data)
             
             // Save tokens to keychain
             await saveTokens(accessToken: authResponse.accessToken, refreshToken: authResponse.refreshToken)
             
+            // Try to fetch user profile from Supabase to get the latest data (including display_name)
+            var fetchedUser: User? = nil
+            if let profileUser = await fetchUserProfile(accessToken: authResponse.accessToken) {
+                fetchedUser = profileUser
+                print("✅ Fetched user profile from Supabase with display_name: \(profileUser.displayName ?? "nil")")
+            }
+            
+            // Try to preserve existing user name from keychain (for subsequent sign-ins)
+            let existingUser = await loadUser()
+            let preservedName = existingUser?.displayName ?? existingUser?.fullName
+            
             // Create user from Apple credential (use data from Supabase response, fallback to credential)
             let email = authResponse.user.email ?? credential.email
             let fullName = credential.fullName
-            let displayName = fullName != nil ? "\(fullName!.givenName ?? "") \(fullName!.familyName ?? "")".trimmingCharacters(in: .whitespaces) : authResponse.user.fullName
+            let newDisplayName = fullName != nil ? "\(fullName!.givenName ?? "") \(fullName!.familyName ?? "")".trimmingCharacters(in: .whitespaces) : authResponse.user.fullName
+            
+            // Priority: 1) Fetched from Supabase, 2) Preserved from keychain, 3) New from credential/Supabase
+            let finalDisplayName = fetchedUser?.displayName ?? preservedName ?? authResponse.user.displayName ?? newDisplayName
+            let finalFullName = fetchedUser?.fullName ?? preservedName ?? newDisplayName ?? authResponse.user.fullName
+            let finalUsername = fetchedUser?.username ?? authResponse.user.username
             
             let user = User(
                 id: authResponse.user.id,
                 email: email,
-                fullName: displayName,
-                displayName: authResponse.user.displayName ?? displayName,
-                photoURL: authResponse.user.photoURL,
+                fullName: finalFullName,
+                displayName: finalDisplayName,
+                username: finalUsername,
+                photoURL: fetchedUser?.photoURL ?? authResponse.user.photoURL,
                 createdAt: authResponse.user.createdAt
             )
             
-            // Save user
+            // Save user to keychain for persistence first
+            await saveUser(user)
+            
+            // Save user and update authentication state on main thread
             await MainActor.run {
                 currentUser = user
                 isAuthenticated = true
                 isLoading = false
+                print("✅ User signed in successfully with Apple - state updated on main thread")
             }
             
-            // Save user to keychain for persistence
-            await saveUser(user)
-            
-            print("✅ User signed in successfully with Apple")
+            // Give UI a moment to update before any navigation
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
         } catch {
             let errorMsg = error.localizedDescription
             await MainActor.run {
@@ -364,6 +407,53 @@ class AuthManager: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Fetch User Profile from Supabase
+    func fetchUserProfile(accessToken: String) async -> User? {
+        let url = URL(string: "\(supabaseUrl)/auth/v1/user")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseKey, forHTTPHeaderField: "apikey")
+        
+        do {
+            let (data, response) = try await urlSession.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                return nil
+            }
+            
+            // Parse user data from response
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let idString = json["id"] as? String,
+               let userId = UUID(uuidString: idString) {
+                
+                let email = json["email"] as? String
+                let userMetadata = json["user_metadata"] as? [String: Any]
+                let displayName = userMetadata?["display_name"] as? String
+                let fullName = userMetadata?["full_name"] as? String ?? displayName
+                let username = userMetadata?["username"] as? String
+                // Check both root level and user_metadata for avatar_url
+                let photoURL = json["avatar_url"] as? String ?? userMetadata?["avatar_url"] as? String
+                
+                let createdAtString = json["created_at"] as? String
+                let createdAt = createdAtString.flatMap { ISO8601DateFormatter().date(from: $0) }
+                
+                return User(
+                    id: userId,
+                    email: email,
+                    fullName: fullName,
+                    displayName: displayName ?? fullName,
+                    username: username,
+                    photoURL: photoURL,
+                    createdAt: createdAt
+                )
+            }
+        } catch {
+            print("⚠️ Failed to fetch user profile: \(error)")
+        }
+        return nil
+    }
+    
     // MARK: - Refresh Token (if needed)
     func refreshTokenIfNeeded() async throws -> String? {
         guard let refreshToken = await getKeychainValue(key: refreshTokenKey) else {
@@ -412,7 +502,7 @@ class AuthManager: NSObject, ObservableObject {
         await deleteKeychainValue(key: "oauth_state")
     }
     
-    private func saveUser(_ user: User) async {
+    func saveUser(_ user: User) async {
         if let userData = try? JSONEncoder().encode(user) {
             await saveKeychainValue(key: userKey, value: String(data: userData, encoding: .utf8) ?? "")
         }

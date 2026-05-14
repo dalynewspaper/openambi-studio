@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AVKit
 import CoreLocation
 
 struct RecordingMetadataView: View {
@@ -8,8 +9,13 @@ struct RecordingMetadataView: View {
     let onCancel: () -> Void
     
     @StateObject private var locationManager = LocationManager.shared
+    @StateObject private var permissionsManager = PermissionsManager.shared
     @StateObject private var supabaseService = SupabaseService()
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var compositionSession: CompositionSessionStore
+    
+    private let localStorage = LocalRecordingStorage.shared
+    private let videoAssetStore = VideoAssetStore.shared
     
     @State private var title: String = ""
     @State private var category: String = "My Recordings"
@@ -22,6 +28,9 @@ struct RecordingMetadataView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showAuthentication = false
+    @State private var showLocationSettingsAlert = false
+    @State private var useVideoBackground = true
+    @State private var videoThumbnail: UIImage?
     
     @Environment(\.dismiss) private var dismiss
     
@@ -49,21 +58,19 @@ struct RecordingMetadataView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.2),
-                        Color(red: 0.05, green: 0.05, blue: 0.15)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                // Background - consistent with app theme
+                AppTheme.background
+                    .ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: 30) {
                         // Recording info display
                         recordingInfoSection
+                        
+                        // Video preview (if video attached)
+                        if recordingResult.videoURL != nil {
+                            videoPreviewSection
+                        }
                         
                         // Icon selection
                         iconSelectionSection
@@ -79,6 +86,11 @@ struct RecordingMetadataView: View {
                     }
                     .padding(20)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture {
+                    // Dismiss keyboard when tapping outside text fields
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
             }
             .navigationTitle("Save Recording")
             .navigationBarTitleDisplayMode(.inline)
@@ -93,17 +105,25 @@ struct RecordingMetadataView: View {
         }
         .onAppear {
             generateAutoTitle()
+            permissionsManager.updatePermissionStates()
             requestLocationIfNeeded()
+            generateVideoThumbnail()
         }
-        .alert("Location Permission", isPresented: $showLocationPermissionAlert) {
+        .alert("Location Access", isPresented: $showLocationPermissionAlert) {
             Button("Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
+                PermissionsManager.shared.openLocationSettings()
             }
             Button("Skip", role: .cancel) {}
         } message: {
-            Text("Enable location access to automatically tag your recordings with where they were made.")
+            Text("We'd like to tag your recordings with location so you can easily find and organize them later. For example, \"Beach Waves - Malibu\" or \"Coffee Shop - Downtown\".\n\nYour location is only captured when you record and is stored privately with your recordings.")
+        }
+        .alert("Location Permission Required", isPresented: $showLocationSettingsAlert) {
+            Button("Settings") {
+                PermissionsManager.shared.openLocationSettings()
+            }
+            Button("Skip", role: .cancel) {}
+        } message: {
+            Text("Location access is currently denied. You can enable it in Settings to tag your recordings with location.")
         }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -112,15 +132,16 @@ struct RecordingMetadataView: View {
         }
         .sheet(isPresented: $showAuthentication) {
             AuthenticationView(authManager: authManager)
-            .onDisappear {
-                // After authentication, try saving again if user signed in
-                if authManager.isAuthenticated {
-                    // Small delay to ensure auth state is updated
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        handleSave()
+                .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
+                    // After successful authentication, dismiss sheet and save
+                    if isAuthenticated && !authManager.isLoading {
+                        showAuthentication = false
+                        // Small delay to ensure auth state is fully updated
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            handleSave()
+                        }
                     }
                 }
-            }
         }
         .overlay {
             if isUploading || isSavingToLibrary {
@@ -166,33 +187,12 @@ struct RecordingMetadataView: View {
         VStack(spacing: 12) {
             HStack(spacing: 16) {
                 // Recording icon
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 1.0, green: 0.3, blue: 0.3).opacity(0.3),
-                                    Color(red: 1.0, green: 0.5, blue: 0.3).opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-                    
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 1.0, green: 0.3, blue: 0.3),
-                                    Color(red: 1.0, green: 0.5, blue: 0.3)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                CircularIcon(
+                    icon: "waveform.circle.fill",
+                    color: SoundColor.fireplace,
+                    isActive: true,
+                    size: .primary
+                )
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(formatDuration(recordingResult.duration))
@@ -240,33 +240,14 @@ struct RecordingMetadataView: View {
                     ForEach(availableIcons, id: \.self) { icon in
                         Button(action: {
                             selectedIcon = icon
+                            HapticFeedback.light()
                         }) {
-                            ZStack {
-                                Circle()
-                                    .fill(selectedIcon == icon ? 
-                                          LinearGradient(
-                                            colors: [
-                                                Color(red: 0.3, green: 0.5, blue: 1.0),
-                                                Color(red: 0.5, green: 0.3, blue: 1.0)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                          ) :
-                                          LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.1),
-                                                Color.white.opacity(0.05)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                          )
-                                    )
-                                    .frame(width: 50, height: 50)
-                                
-                                Image(systemName: icon)
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(selectedIcon == icon ? .white : .white.opacity(0.7))
-                            }
+                            CircularIcon(
+                                icon: icon,
+                                color: SoundColor.rain,
+                                isActive: selectedIcon == icon,
+                                size: selectedIcon == icon ? .primary : .secondary
+                            )
                         }
                     }
                 }
@@ -293,6 +274,10 @@ struct RecordingMetadataView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(.ultraThinMaterial)
                     )
+                    .submitLabel(.done)
+                    .onSubmit {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
             }
             
             // Category
@@ -340,6 +325,10 @@ struct RecordingMetadataView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(.ultraThinMaterial)
                     )
+                    .submitLabel(.done)
+                    .onSubmit {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
             }
         }
     }
@@ -375,10 +364,21 @@ struct RecordingMetadataView: View {
                 )
             } else {
                 Button(action: {
-                    if locationManager.authorizationStatus == .denied {
-                        showLocationPermissionAlert = true
-                    } else {
+                    let status = permissionsManager.checkLocationPermission()
+                    switch status {
+                    case .denied, .restricted:
+                        showLocationSettingsAlert = true
+                    case .notDetermined:
+                        Task {
+                            let granted = await permissionsManager.requestLocationPermission()
+                            if granted {
+                                locationManager.requestLocation()
+                            }
+                        }
+                    case .authorizedWhenInUse, .authorizedAlways:
                         locationManager.requestLocation()
+                    @unknown default:
+                        break
                     }
                 }) {
                     HStack {
@@ -398,20 +398,117 @@ struct RecordingMetadataView: View {
         }
     }
     
+    // MARK: - Video Preview Section
+    private var videoPreviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "film.fill")
+                    .foregroundColor(.white.opacity(0.8))
+                Text("Video Background")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            
+            VStack(spacing: 16) {
+                // Thumbnail preview
+                if let thumbnail = videoThumbnail {
+                    ZStack {
+                        Image(uiImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(height: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                        
+                        // Play overlay icon
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 48, height: 48)
+                            .overlay {
+                                Image(systemName: "play.fill")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 18))
+                                    .offset(x: 2)
+                            }
+                        
+                        // Duration badge
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Text(formatDuration(recordingResult.duration))
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule()
+                                            .fill(.black.opacity(0.6))
+                                    )
+                                    .padding(10)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                } else {
+                    // Placeholder while generating thumbnail
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.05))
+                        .frame(height: 180)
+                        .overlay {
+                            ProgressView()
+                                .tint(.white.opacity(0.5))
+                        }
+                }
+                
+                // Toggle for using video as background
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Use as ambient background")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white)
+                        Text("Loop the video behind your soundscape")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $useVideoBackground)
+                        .labelsHidden()
+                        .tint(SoundColor.rain)
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.2),
+                                        Color.white.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+            )
+        }
+    }
+    
     // MARK: - Computed Properties
     
     private var buttonBackgroundStyle: AnyShapeStyle {
         if title.isEmpty {
             AnyShapeStyle(Color.white.opacity(0.2))
         } else {
-            AnyShapeStyle(LinearGradient(
-                colors: [
-                    Color(red: 0.3, green: 0.72, blue: 1.0),
-                    Color(red: 0.18, green: 0.6, blue: 1.0)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            ))
+            AnyShapeStyle(SoundColor.rainGradient)
         }
     }
     
@@ -448,36 +545,75 @@ struct RecordingMetadataView: View {
         }
     }
     
+    private func generateVideoThumbnail() {
+        guard let videoURL = recordingResult.videoURL else { return }
+        
+        Task.detached(priority: .userInitiated) {
+            let asset = AVAsset(url: videoURL)
+            let imageGenerator = AVAssetImageGenerator(asset: asset)
+            imageGenerator.appliesPreferredTrackTransform = true
+            imageGenerator.maximumSize = CGSize(width: 640, height: 360)
+            
+            do {
+                let time = CMTime(seconds: 0.5, preferredTimescale: 600)
+                let cgImage = try await imageGenerator.image(at: time).image
+                let uiImage = UIImage(cgImage: cgImage)
+                await MainActor.run {
+                    self.videoThumbnail = uiImage
+                }
+            } catch {
+                print("⚠️ Failed to generate video thumbnail: \(error.localizedDescription)")
+            }
+        }
+    }
+    
     private func requestLocationIfNeeded() {
-        if locationManager.authorizationStatus == .notDetermined {
+        let status = permissionsManager.checkLocationPermission()
+        switch status {
+        case .notDetermined:
+            // Request permission
+            Task {
+                let granted = await permissionsManager.requestLocationPermission()
+                if granted {
+                    locationManager.requestLocation()
+                }
+            }
+        case .authorizedWhenInUse, .authorizedAlways:
+            // Permission granted, request location
             locationManager.requestLocation()
+        case .denied, .restricted:
+            // Permission denied - show alert if user tries to add location
+            break
+        @unknown default:
+            break
         }
     }
     
     private func handleSave() {
         guard !title.isEmpty else { return }
-        
-        // If not signed in, show authentication sheet instead of error
-        guard let user = authManager.currentUser else {
-            showAuthentication = true
-            return
-        }
+
+        let recordingId = UUID()
         
         isUploading = true
         
         Task {
-            guard var accessToken = await authManager.getAccessToken() else {
-                await MainActor.run {
-                    isUploading = false
-                    errorMessage = "You must be signed in to save recordings."
-                    showError = true
-                }
+            // If not signed in, save locally only
+            guard let user = authManager.currentUser else {
+                await handleLocalOnlySave(recordingId: recordingId)
                 return
             }
             
+            guard var accessToken = await authManager.getAccessToken() else {
+                // No token, but user is signed in - save locally as fallback
+                await handleLocalOnlySave(recordingId: recordingId)
+                return
+            }
+            
+            let persistedVideoURL = persistVideoIfNeeded(recordingId: recordingId)
             do {
                 // Try upload with current token
-                let track = try await supabaseService.uploadRecording(
+                var track = try await supabaseService.uploadRecording(
+                    recordingId: recordingId,
                     fileURL: recordingResult.fileURL,
                     accessToken: accessToken,
                     userId: user.id,
@@ -489,8 +625,10 @@ struct RecordingMetadataView: View {
                     fileSize: recordingResult.fileSize,
                     locationName: locationManager.locationName,
                     latitude: locationManager.currentLocation?.coordinate.latitude,
-                    longitude: locationManager.currentLocation?.coordinate.longitude
+                    longitude: locationManager.currentLocation?.coordinate.longitude,
+                    videoFileURL: persistedVideoURL
                 )
+
                 
                 // Upload complete, now verify it appears in database (handles read replica lag)
                 await MainActor.run {
@@ -517,7 +655,8 @@ struct RecordingMetadataView: View {
                         
                         // Retry upload with refreshed token
                         do {
-                            let track = try await supabaseService.uploadRecording(
+                            var track = try await supabaseService.uploadRecording(
+                                recordingId: recordingId,
                                 fileURL: recordingResult.fileURL,
                                 accessToken: accessToken,
                                 userId: user.id,
@@ -529,8 +668,10 @@ struct RecordingMetadataView: View {
                                 fileSize: recordingResult.fileSize,
                                 locationName: locationManager.locationName,
                                 latitude: locationManager.currentLocation?.coordinate.latitude,
-                                longitude: locationManager.currentLocation?.coordinate.longitude
+                                longitude: locationManager.currentLocation?.coordinate.longitude,
+                                videoFileURL: persistedVideoURL
                             )
+
                             
                             // Upload complete, now verify it appears in database
                             await MainActor.run {
@@ -547,35 +688,146 @@ struct RecordingMetadataView: View {
                                 track: track
                             )
                         } catch {
-                            await MainActor.run {
-                                isUploading = false
-                                errorMessage = error.localizedDescription
-                                showError = true
-                            }
+                            // Retry also failed - save locally
+                            await handleCloudUploadFailure(error: error, recordingId: recordingId)
                         }
                     } else {
-                        // Token refresh failed
-                        await MainActor.run {
-                            isUploading = false
-                            errorMessage = "Authentication expired. Please sign in again."
-                            showError = true
-                        }
+                        // Token refresh failed - save locally if we can
+                        await handleCloudUploadFailure(error: NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Authentication expired. Please sign in again."]), recordingId: recordingId)
                     }
                 default:
-                    // Other error
-                    await MainActor.run {
-                        isUploading = false
-                        errorMessage = error.localizedDescription
-                        showError = true
-                    }
+                    // Network or other error - save locally as fallback
+                    await handleCloudUploadFailure(error: error, recordingId: recordingId)
                 }
             } catch {
+                // Network or other error - save locally as fallback
+                await handleCloudUploadFailure(error: error, recordingId: recordingId)
+            }
+        }
+    }
+    
+    // MARK: - Handle Local Only Save
+    /// Saves recording locally when user is not signed in
+    private func handleLocalOnlySave(recordingId: UUID) async {
+        print("💾 Saving recording locally (user not signed in)")
+        
+        do {
+            // Save to local storage
+            try localStorage.saveRecording(
+                fileURL: recordingResult.fileURL,
+                id: recordingId,
+                title: title,
+                category: category,
+                description: description.isEmpty ? nil : description,
+                icon: selectedIcon,
+                duration: recordingResult.duration,
+                fileSize: recordingResult.fileSize,
+                videoURL: useVideoBackground ? recordingResult.videoURL : nil,
+                locationName: locationManager.locationName,
+                latitude: locationManager.currentLocation?.coordinate.latitude,
+                longitude: locationManager.currentLocation?.coordinate.longitude
+            )
+            
+            // Convert to AudioTrack for immediate use
+            if let localMetadata = localStorage.loadLocalRecordings().first(where: { $0.id == recordingId }),
+               let track = localStorage.toAudioTrack(localMetadata) {
                 await MainActor.run {
                     isUploading = false
-                    errorMessage = error.localizedDescription
-                    showError = true
+                    saveStatusMessage = "Saved locally (sign in to sync to cloud)"
+                    
+                    // Show success message briefly
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        // Post notification for sync
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("RecordingSavedLocally"),
+                            object: nil,
+                            userInfo: ["recordingId": recordingId.uuidString]
+                        )
+                        applyMixBackgroundPreference(for: track)
+                        onSave(track)
+                    }
                 }
+            } else {
+                throw NSError(domain: "LocalStorage", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create track from local storage"])
             }
+        } catch {
+            await MainActor.run {
+                isUploading = false
+                errorMessage = "Failed to save recording locally: \(error.localizedDescription)"
+                showError = true
+            }
+        }
+    }
+    
+    // MARK: - Handle Cloud Upload Failure
+    /// Saves recording locally when cloud upload fails
+    private func handleCloudUploadFailure(error: Error, recordingId: UUID) async {
+        print("⚠️ Cloud upload failed, saving locally: \(error.localizedDescription)")
+        
+        do {
+            // Save to local storage
+            try localStorage.saveRecording(
+                fileURL: recordingResult.fileURL,
+                id: recordingId,
+                title: title,
+                category: category,
+                description: description.isEmpty ? nil : description,
+                icon: selectedIcon,
+                duration: recordingResult.duration,
+                fileSize: recordingResult.fileSize,
+                videoURL: useVideoBackground ? recordingResult.videoURL : nil,
+                locationName: locationManager.locationName,
+                latitude: locationManager.currentLocation?.coordinate.latitude,
+                longitude: locationManager.currentLocation?.coordinate.longitude
+            )
+            
+            // Convert to AudioTrack for immediate use
+            if let localMetadata = localStorage.loadLocalRecordings().first(where: { $0.id == recordingId }),
+               let track = localStorage.toAudioTrack(localMetadata) {
+                await MainActor.run {
+                    isUploading = false
+                    saveStatusMessage = "Saved locally (will sync when online)"
+                    
+                    // Show success message briefly
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        // Post notification for sync
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("RecordingSavedLocally"),
+                            object: nil,
+                            userInfo: ["recordingId": recordingId.uuidString]
+                        )
+                        applyMixBackgroundPreference(for: track)
+                        onSave(track)
+                    }
+                }
+            } else {
+                throw NSError(domain: "LocalStorage", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create track from local storage"])
+            }
+        } catch {
+            await MainActor.run {
+                isUploading = false
+                errorMessage = "Failed to save recording. Cloud upload failed: \(error.localizedDescription). Local save also failed: \(error.localizedDescription)"
+                showError = true
+            }
+        }
+    }
+
+    private func applyMixBackgroundPreference(for track: AudioTrack) {
+        guard useVideoBackground,
+              let v = track.videoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !v.isEmpty else { return }
+        compositionSession.setBackgroundRecording(id: track.id)
+    }
+
+    private func persistVideoIfNeeded(recordingId: UUID) -> URL? {
+        guard useVideoBackground, let videoURL = recordingResult.videoURL else { return nil }
+
+        do {
+            let savedURL = try videoAssetStore.saveVideoAsset(sourceURL: videoURL, id: recordingId)
+            return savedURL
+        } catch {
+            print("⚠️ Failed to persist video asset: \(error.localizedDescription)")
+            return nil
         }
     }
     
@@ -606,10 +858,12 @@ struct RecordingMetadataView: View {
             
             do {
                 // Try targeted fetch first (more efficient)
+                // Bypass cache to ensure we get the latest data for verification
                 let recordings = try await supabaseService.fetchUserRecordings(
                     accessToken: accessToken,
                     userId: userId,
-                    recordingId: recordingId
+                    recordingId: recordingId,
+                    bypassCache: true
                 )
                 
                 if recordings.contains(where: { $0.id == recordingId }) {
@@ -641,6 +895,7 @@ struct RecordingMetadataView: View {
                         userInfo: ["recordingId": track.id.uuidString]
                     )
                     print("📢 Posted RecordingSaved notification for: \(track.name) (ID: \(track.id.uuidString))")
+                    applyMixBackgroundPreference(for: track)
                     onSave(track)
                 }
             } else {
@@ -656,6 +911,7 @@ struct RecordingMetadataView: View {
                         userInfo: ["recordingId": track.id.uuidString]
                     )
                     print("📢 Posted RecordingSaved notification for: \(track.name) (ID: \(track.id.uuidString))")
+                    applyMixBackgroundPreference(for: track)
                     onSave(track)
                 }
             }
@@ -748,6 +1004,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     RecordingMetadataView(
         recordingResult: RecordingResult(
             fileURL: URL(fileURLWithPath: "/tmp/test.m4a"),
+            videoURL: nil,
             duration: 125.5,
             fileSize: 1200000,
             averageLevel: 0.5,
@@ -756,5 +1013,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         onSave: { _ in },
         onCancel: {}
     )
+    .environmentObject(AuthManager())
+    .environmentObject(CompositionSessionStore())
 }
 

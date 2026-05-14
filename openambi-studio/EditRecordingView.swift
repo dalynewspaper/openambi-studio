@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct EditRecordingView: View {
     let recording: AudioTrack
@@ -7,6 +8,7 @@ struct EditRecordingView: View {
     
     @StateObject private var supabaseService = SupabaseService()
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var compositionSession: CompositionSessionStore
     
     @State private var title: String
     @State private var category: String
@@ -17,6 +19,13 @@ struct EditRecordingView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showDeleteConfirmation = false
+    @State private var isPreviewing = false
+    @State private var previewPlayer: AVPlayer?
+    @State private var isTitleEditing = false
+    @State private var isTitleFocused = false
+    @State private var isDescriptionExpanded = false
+    @State private var iconCarouselOffset: CGFloat = 0
+    @State private var pendingVideoRemoval = false
     
     @Environment(\.dismiss) private var dismiss
     
@@ -55,32 +64,39 @@ struct EditRecordingView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.2),
-                        Color(red: 0.05, green: 0.05, blue: 0.15)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                // Background - use AppTheme for consistency
+                AppTheme.background
+                    .ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: 30) {
-                        // Recording info display
-                        recordingInfoSection
+                    VStack(spacing: 40) {
+                        // Hero recording display
+                        heroRecordingSection
                         
-                        // Icon selection
-                        iconSelectionSection
+                        // Sound Identity (icon selection)
+                        soundIdentitySection
                         
                         // Metadata form
                         metadataForm
+
+                        if hasRemovableCloudVideo {
+                            videoBackgroundEditSection
+                        }
                         
                         // Action buttons
                         actionButtons
                     }
                     .padding(20)
+                    .padding(.bottom, 40)
+                }
+                .onTapGesture {
+                    // Dismiss title editing when tapping outside
+                    if isTitleEditing {
+                        withAnimation(AppTheme.Animation.smooth) {
+                            isTitleEditing = false
+                            isTitleFocused = false
+                        }
+                    }
                 }
             }
             .navigationTitle("Edit Recording")
@@ -90,7 +106,7 @@ struct EditRecordingView: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(AppColors.secondaryText) // Phase 4: Vibrant color
                 }
             }
         }
@@ -99,89 +115,195 @@ struct EditRecordingView: View {
         } message: {
             Text(errorMessage)
         }
-        .alert("Delete Recording", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
+        .confirmationDialog("Remove Recording", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            Button("Remove Recording", role: .destructive) {
                 handleDelete()
             }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Are you sure you want to delete \"\(title)\"? This action cannot be undone.")
+            let durationText = recording.duration.map { formatDuration($0) } ?? ""
+            Text("Remove \"\(title)\"\(durationText.isEmpty ? "" : " (\(durationText))")? This recording will be removed from your library.")
         }
     }
     
-    // MARK: - Recording Info Section
-    private var recordingInfoSection: some View {
-        VStack(spacing: 16) {
+    private var hasRemovableCloudVideo: Bool {
+        guard recording.isUserRecording else { return false }
+        guard let v = recording.videoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !v.isEmpty else { return false }
+        return v.lowercased().hasPrefix("http")
+    }
+
+    private var videoBackgroundEditSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Label("Mix video background", systemImage: "rectangle.on.rectangle")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+
+            if pendingVideoRemoval {
+                Text("The synced video will be removed from cloud storage when you save.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(AppColors.secondaryText)
+
+                Button(action: {
+                    pendingVideoRemoval = false
+                }) {
+                    Text("Keep video background")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(SoundColor.rain)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text("Shown behind your mix when you choose “Use as Mix Background” on the soundscape.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(AppColors.secondaryText)
+
+                Button(role: .destructive, action: {
+                    pendingVideoRemoval = true
+                }) {
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Remove video from cloud")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(.white.opacity(0.95))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.red.opacity(0.22))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.red.opacity(0.35), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(18)
+        .liquidGlass(intensity: 0.65, cornerRadius: 18, blurIntensity: .light, opacityLevel: .content)
+    }
+
+    // MARK: - Hero Recording Section
+    private var heroRecordingSection: some View {
+        VStack(spacing: 20) {
             ZStack {
+                // Pulsing glow effect when previewing
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.white.opacity(isPreviewing ? 0.25 : 0.1),
+                                Color.white.opacity(isPreviewing ? 0.1 : 0.05),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 80
+                        )
+                    )
+                    .frame(width: 160, height: 160)
+                    .blur(radius: isPreviewing ? 12 : 6)
+                    .opacity(isPreviewing ? 1.0 : 0.7)
+                    .scaleEffect(isPreviewing ? 1.1 : 1.0)
+                    .animation(
+                        Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true),
+                        value: isPreviewing
+                    )
+                
+                // Main icon circle - larger and more prominent
                 Circle()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(red: 0.3, green: 0.5, blue: 1.0).opacity(0.4),
-                                Color(red: 0.5, green: 0.3, blue: 1.0).opacity(0.3)
+                                Color.white.opacity(0.2),
+                                Color.white.opacity(0.1),
+                                Color.white.opacity(0.05)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 100, height: 100)
-                    .liquidGlass(intensity: 0.9, cornerRadius: 50, blurIntensity: .light, opacityLevel: .content)
-                    .shadow(color: Color(red: 0.3, green: 0.5, blue: 1.0).opacity(0.3), radius: 15, x: 0, y: 5)
+                    .frame(width: 140, height: 140)
+                    .liquidGlass(intensity: 0.85, cornerRadius: 70, blurIntensity: .medium, opacityLevel: .content)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.3),
+                                        Color.white.opacity(0.15),
+                                        Color.white.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 8)
                 
                 Image(systemName: selectedIcon)
-                    .font(.system(size: 40, weight: .medium))
+                    .font(.system(size: 60, weight: .light))
                     .foregroundColor(.white.opacity(0.95))
+                    .scaleEffect(isPreviewing ? 1.05 : 1.0)
+                    .animation(AppTheme.Animation.fluid, value: isPreviewing)
+            }
+            .onTapGesture {
+                previewRecording()
             }
             
-            // Show actual recording duration, not relative time
+            // Duration as subtle caption
             if let duration = recording.duration, duration > 0 {
                 Text(formatDuration(duration))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(AppColors.tertiaryText) // Phase 4: Vibrant color
             } else if let recordedAt = recording.recordedAt {
-                // Fallback to relative time if duration is not available
                 Text(recordedAt, style: .relative)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(AppColors.tertiaryText) // Phase 4: Vibrant color
             }
         }
+        .padding(.vertical, 20)
     }
     
-    // MARK: - Icon Selection Section
-    private var iconSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Icon")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white.opacity(0.9))
+    // MARK: - Sound Identity Section (Icon Selection)
+    private var soundIdentitySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Dynamic label based on selected icon
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Sound Identity")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppColors.primaryText) // Phase 4: Vibrant color
+                
+                Text(iconLabel(for: selectedIcon))
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(.white.opacity(0.6))
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
             
+            // Carousel-style icon picker
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 15) {
+                HStack(spacing: 12) {
                     ForEach(availableIcons, id: \.self) { iconName in
                         Button(action: {
-                            selectedIcon = iconName
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: selectedIcon == iconName ? [
-                                                Color.blue.opacity(0.4),
-                                                Color.blue.opacity(0.3)
-                                            ] : [
-                                                Color.white.opacity(0.15),
-                                                Color.white.opacity(0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 50, height: 50)
-                                    .liquidGlass(intensity: 0.8, cornerRadius: 25, blurIntensity: .light, opacityLevel: .controls)
-                                
-                                Image(systemName: iconName)
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundColor(selectedIcon == iconName ? .white : .white.opacity(0.7))
+                            withAnimation(AppTheme.Animation.liquidSpring) {
+                                selectedIcon = iconName
                             }
+                            // Haptic feedback
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                        }) {
+                            // Phase 3: Use CircularIcon component for consistent design
+                            CircularIcon(
+                                icon: iconName,
+                                color: .white, // Neutral color for icon picker
+                                isActive: selectedIcon == iconName,
+                                size: selectedIcon == iconName ? .primary : .secondary
+                            )
+                            .scaleEffect(selectedIcon == iconName ? 1.05 : 0.95)
+                            .animation(AppTheme.Animation.liquidSpring, value: selectedIcon)
                         }
                     }
                 }
@@ -190,134 +312,192 @@ struct EditRecordingView: View {
         }
     }
     
+    // Helper to get emotional label for icon
+    private func iconLabel(for iconName: String) -> String {
+        switch iconName {
+        case "waveform", "waveform.circle.fill":
+            return "This sound feels like: Texture"
+        case "music.note":
+            return "This sound feels like: Music"
+        case "cloud.rain.fill":
+            return "This sound feels like: Rain"
+        case "cloud.bolt.fill":
+            return "This sound feels like: Thunder"
+        case "tree.fill", "leaf.fill":
+            return "This sound feels like: Nature"
+        case "water.waves":
+            return "This sound feels like: Water"
+        case "flame.fill":
+            return "This sound feels like: Fire"
+        case "house.fill", "building.2.fill":
+            return "This sound feels like: Indoor"
+        case "bird.fill":
+            return "This sound feels like: Wildlife"
+        default:
+            return "This sound feels like: Ambient"
+        }
+    }
+    
     // MARK: - Metadata Form
     private var metadataForm: some View {
-        VStack(spacing: 20) {
-            // Title
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 24) {
+            // Title - neutral glass with blue only on focus
+            VStack(alignment: .leading, spacing: 10) {
                 Text("Title")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppColors.secondaryText) // Phase 4: Vibrant color
                 
-                TextField("Recording title", text: $title)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .liquidGlass(intensity: 1.0, cornerRadius: 16, blurIntensity: .light, opacityLevel: .content)
-                    )
-            }
-            
-            // Category
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Category")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
-                
-                Picker("Category", selection: $category) {
-                    ForEach(categories, id: \.self) { cat in
-                        Text(cat).tag(cat)
+                if isTitleEditing {
+                    TextField("Name this soundscape", text: $title)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(.ultraThinMaterial)
+                                .opacity(0.6)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.2),
+                                            Color.white.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                        .onSubmit {
+                            withAnimation(AppTheme.Animation.smooth) {
+                                isTitleEditing = false
+                                isTitleFocused = false
+                            }
+                        }
+                        .onAppear {
+                            isTitleFocused = true
+                        }
+                } else {
+                    Button(action: {
+                        withAnimation(AppTheme.Animation.smooth) {
+                            isTitleEditing = true
+                        }
+                    }) {
+                        HStack {
+                            Text(title.isEmpty ? "Name this soundscape" : title)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(title.isEmpty ? .white.opacity(0.5) : .white.opacity(0.95))
+                            Spacer()
+                            Image(systemName: "pencil")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(AppColors.quaternaryText) // Phase 4: Vibrant color
+                        }
+                        .padding(18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(.ultraThinMaterial)
+                                .opacity(0.6)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.2),
+                                            Color.white.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
                     }
                 }
-                .pickerStyle(.menu)
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .liquidGlass(intensity: 1.0, cornerRadius: 16, blurIntensity: .light, opacityLevel: .content)
-                )
-                .foregroundColor(.white)
             }
             
-            // Description
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Description")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+            // Description - collapsed by default
+            VStack(alignment: .leading, spacing: 10) {
+                Button(action: {
+                    withAnimation(AppTheme.Animation.smooth) {
+                        isDescriptionExpanded.toggle()
+                    }
+                }) {
+                    HStack {
+                        Text("Add a note")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(AppColors.secondaryText) // Phase 4: Vibrant color
+                        Spacer()
+                        Image(systemName: isDescriptionExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppColors.tertiaryText) // Phase 4: Vibrant color
+                    }
+                }
                 
-                TextField("Optional description", text: $description, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
-                    .lineLimit(3...6)
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .liquidGlass(intensity: 1.0, cornerRadius: 16, blurIntensity: .light, opacityLevel: .content)
-                    )
+                if isDescriptionExpanded {
+                    TextField("Where was this recorded?", text: $description, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(AppColors.primaryText) // Phase 4: Vibrant color
+                        .lineLimit(3...6)
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .liquidGlass(intensity: 0.7, cornerRadius: 16, blurIntensity: .light, opacityLevel: .content)
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
     }
     
-    // MARK: - Action Buttons
+    // MARK: - Action Buttons (Phase 1: Liquid Glass)
     private var actionButtons: some View {
         VStack(spacing: 16) {
-            // Save button
-            Button(action: {
+            // Phase 1: Primary button with colored Liquid Glass
+            PrimaryButton(
+                "Save Changes",
+                color: AppTheme.accent,
+                isLoading: isSaving,
+                isDisabled: false
+            ) {
                 handleSave()
-            }) {
-                HStack {
-                    if isSaving {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Save Changes")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.blue.opacity(0.6),
-                                    Color.blue.opacity(0.4)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                )
-                .liquidGlass(intensity: 0.9, cornerRadius: 16, blurIntensity: .medium, opacityLevel: .controls)
             }
             .disabled(isSaving || isDeleting)
             
-            // Delete button
+            // Remove Recording button - glass outline, neutral
             Button(action: {
                 showDeleteConfirmation = true
             }) {
                 HStack {
-                    if isDeleting {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: "trash")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("Delete Recording")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.red.opacity(0.8))
+                    Text("Remove Recording")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(AppColors.secondaryText) // Phase 4: Vibrant color
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 56)
+                .frame(height: 50)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(
+                        .stroke(
                             LinearGradient(
                                 colors: [
-                                    Color.red.opacity(0.5),
-                                    Color.red.opacity(0.3)
+                                    Color.white.opacity(0.2),
+                                    Color.white.opacity(0.1)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
-                            )
+                            ),
+                            lineWidth: 1.5
                         )
                 )
-                .liquidGlass(intensity: 0.9, cornerRadius: 16, blurIntensity: .medium, opacityLevel: .controls)
+                .liquidGlass(intensity: 0.6, cornerRadius: 16, blurIntensity: .light, opacityLevel: .content)
             }
             .disabled(isSaving || isDeleting)
         }
@@ -353,6 +533,14 @@ struct EditRecordingView: View {
                     return
                 }
                 
+                let videoPatch: UserRecordingVideoRPCPatch = {
+                    guard pendingVideoRemoval else { return .leaveUnchanged }
+                    guard let raw = recording.videoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          raw.lowercased().hasPrefix("http") else { return .leaveUnchanged }
+                    let path = supabaseService.extractObjectPathFromPublicStorageURL(raw, bucket: "user-recording-videos")
+                    return .clearVideo(removingStorageObjectPath: path)
+                }()
+
                 // Update recording in Supabase with retry on JWT expiration
                 print("📝 Starting update for recording: \(recording.id)")
                 NSLog("📝 UPDATE START: Recording ID: %@", recording.id.uuidString)
@@ -364,7 +552,8 @@ struct EditRecordingView: View {
                         name: title.trimmingCharacters(in: .whitespaces),
                         category: category,
                         description: description.isEmpty ? nil : description,
-                        icon: selectedIcon
+                        icon: selectedIcon,
+                        videoPatch: videoPatch
                     )
                     print("✅ Update completed successfully")
                     NSLog("✅ UPDATE SUCCESS: Recording ID: %@", recording.id.uuidString)
@@ -384,7 +573,8 @@ struct EditRecordingView: View {
                         name: title.trimmingCharacters(in: .whitespaces),
                         category: category,
                         description: description.isEmpty ? nil : description,
-                        icon: selectedIcon
+                        icon: selectedIcon,
+                        videoPatch: videoPatch
                     )
                     print("✅ Update completed successfully after token refresh")
                     NSLog("✅ UPDATE SUCCESS: After token refresh, Recording ID: %@", recording.id.uuidString)
@@ -395,13 +585,14 @@ struct EditRecordingView: View {
                 }
                 
                 // Create updated AudioTrack
-                let updatedTrack = AudioTrack(
+                var updatedTrack = AudioTrack(
                     id: recording.id,
                     name: title.trimmingCharacters(in: .whitespaces),
                     category: category,
                     icon: selectedIcon,
                     description: description.isEmpty ? nil : description,
                     audioUrl: recording.audioUrl,
+                    videoUrl: pendingVideoRemoval ? nil : recording.videoUrl,
                     trackType: recording.trackType,
                     frequencyPreset: recording.frequencyPreset,
                     isActive: recording.isActive,
@@ -417,10 +608,29 @@ struct EditRecordingView: View {
                     playCount: recording.playCount,
                     lastPlayedAt: recording.lastPlayedAt
                 )
+                updatedTrack.useAdvancedRendering = recording.useAdvancedRendering
+                updatedTrack.spatialX = recording.spatialX
+                updatedTrack.spatialY = recording.spatialY
+                updatedTrack.reverbMix = recording.reverbMix
+                updatedTrack.eqLowGain = recording.eqLowGain
+                updatedTrack.eqMidGain = recording.eqMidGain
+                updatedTrack.eqHighGain = recording.eqHighGain
                 
                 await MainActor.run {
+                    if pendingVideoRemoval {
+                        compositionSession.clearBackgroundIfRecordingMatches(recording.id)
+                    }
                     isSaving = false
                     onSave(updatedTrack)
+                    
+                    // Post notification for recording update
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("RecordingUpdated"),
+                        object: nil,
+                        userInfo: ["recordingId": updatedTrack.id.uuidString]
+                    )
+                    print("📢 Posted RecordingUpdated notification for: \(updatedTrack.name) (ID: \(updatedTrack.id.uuidString))")
+                    
                     dismiss()
                 }
             } catch {
@@ -464,6 +674,15 @@ struct EditRecordingView: View {
                     }
                     return
                 }
+
+                guard let ownerUserId = await MainActor.run(body: { recording.userId ?? authManager.currentUser?.id }) else {
+                    await MainActor.run {
+                        errorMessage = "You must be signed in to delete recordings."
+                        showError = true
+                        isDeleting = false
+                    }
+                    return
+                }
                 
                 // Delete from Supabase with retry on JWT expiration
                 // Note: deleteUserRecording now treats "Recording not found" as success (idempotent)
@@ -473,7 +692,8 @@ struct EditRecordingView: View {
                 do {
                     try await supabaseService.deleteUserRecording(
                         accessToken: token,
-                        recordingId: recording.id
+                        recordingId: recording.id,
+                        userId: ownerUserId
                     )
                     print("✅ Delete completed successfully")
                     NSLog("✅ DELETE SUCCESS: Recording ID: %@", recording.id.uuidString)
@@ -489,7 +709,8 @@ struct EditRecordingView: View {
                     
                     try await supabaseService.deleteUserRecording(
                         accessToken: newToken,
-                        recordingId: recording.id
+                        recordingId: recording.id,
+                        userId: ownerUserId
                     )
                     print("✅ Delete completed successfully after token refresh")
                     NSLog("✅ DELETE SUCCESS: After token refresh, Recording ID: %@", recording.id.uuidString)
@@ -505,6 +726,15 @@ struct EditRecordingView: View {
                 await MainActor.run {
                     isDeleting = false
                     onDelete() // This will remove from local state and refresh
+                    
+                    // Post notification for recording deletion
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("RecordingDeleted"),
+                        object: nil,
+                        userInfo: ["recordingId": recording.id.uuidString]
+                    )
+                    print("📢 Posted RecordingDeleted notification for: \(recording.name) (ID: \(recording.id.uuidString))")
+                    
                     dismiss()
                 }
             } catch {
@@ -522,6 +752,40 @@ struct EditRecordingView: View {
                     showError = true
                     isDeleting = false
                 }
+            }
+        }
+    }
+    
+    // MARK: - Preview Functionality
+    private func previewRecording() {
+        // Light haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+        
+        // Stop any existing preview
+        previewPlayer?.pause()
+        previewPlayer = nil
+        isPreviewing = false
+        
+        // Start preview (short loop, 3-5 seconds)
+        guard let url = URL(string: recording.audioUrl) else { return }
+        
+        let player = AVPlayer(url: url)
+        previewPlayer = player
+        
+        // Set volume lower for preview
+        player.volume = 0.5
+        
+        // Play for 3-5 seconds then stop
+        isPreviewing = true
+        player.play()
+        
+        // Auto-stop after 4 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            if self.previewPlayer === player {
+                player.pause()
+                self.isPreviewing = false
+                self.previewPlayer = nil
             }
         }
     }

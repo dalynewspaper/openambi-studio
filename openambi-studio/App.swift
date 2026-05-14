@@ -6,6 +6,7 @@ struct OpenAmbiStudioApp: App {
     // Shared managers for the entire app
     @StateObject private var audioManager = AudioManager()
     @StateObject private var authManager = AuthManager()
+    @StateObject private var compositionSession = CompositionSessionStore()
     
     var body: some Scene {
         WindowGroup {
@@ -18,6 +19,7 @@ struct OpenAmbiStudioApp: App {
                 ContentView()
                     .environmentObject(audioManager)
                     .environmentObject(authManager)
+                    .environmentObject(compositionSession)
                     .onContinueUserActivity("INPlayMediaIntent") { userActivity in
                         // Handle Siri shortcut to play
                         OpenAmbiShortcuts.handleShortcut("toggle", audioManager: audioManager)

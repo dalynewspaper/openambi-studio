@@ -18,6 +18,7 @@
 		95C633B72ED8644E0051DBA3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 95C633B62ED8644E0051DBA3 /* WidgetKit.framework */; };
 		95C633B92ED8644E0051DBA3 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 95C633B82ED8644E0051DBA3 /* SwiftUI.framework */; };
 		95C633CA2ED8644F0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 95C633B42ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		95D256A42F013D990027785E /* AmbientBackgroundSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D256A32F013D990027785E /* AmbientBackgroundSystem.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* AmbientMixerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* AmbientMixerView.swift */; };
 		A3B4C5D6E7F8A9B0C1D2E3 /* KodeMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A3B4C5D6E7F8A9B0C1D2E4 /* KodeMono-Bold.ttf */; };
 		A7B8C9D0E1F2A3B4C5D6E7F8 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2A3B4C5D6E7F9 /* AuthManager.swift */; };
@@ -41,9 +42,20 @@
 		F8A9B0C1D2E3F4A5B6C7D8E9F0 /* FrequencyPresetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A9B0C1D2E3F4A5B6C7D8E9F1 /* FrequencyPresetService.swift */; };
 		F9A8B7C6D5E4F3A2B1C0D9E8 /* Soundscape3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A8B7C6D5E4F3A2B1C0D9E9 /* Soundscape3DView.swift */; };
 		FF5F3ECEB15066F571C37056 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */; };
+		L1O2C3A4L5R6E7C8O9R0D1I2 /* LocalRecordingStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1O2C3A4L5R6E7C8O9R0D1I3 /* LocalRecordingStorage.swift */; };
+		P1E2R3M4I5S6S7I8O9N0S1M2 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = P1E2R3M4I5S6S7I8O9N0S1M3 /* PermissionsManager.swift */; };
 		P1R2O3F4I5L6E7E8D9I0T1V2 /* ProfileEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */; };
+		R1E2C3O4R5D6I7N8G9S0Y1N2 /* RecordingSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = R1E2C3O4R5D6I7N8G9S0Y1N3 /* RecordingSyncService.swift */; };
 		S1E2T3T4I5N6G7S8V9I0E1W2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */; };
 		S2E3T4I5N6G7S8V9I0E1W4 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */; };
+		V1A2S3T4O5R6E7S8W9I0F1T2 /* VideoAssetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = V1A2S3T4O5R6E7S8W9I0F1T3 /* VideoAssetStore.swift */; };
+		V2P3R4O5C6S7E8R9V0I1C2E3 /* VideoProcessingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = V2P3R4O5C6S7E8R9V0I1C2E4 /* VideoProcessingService.swift */; };
+		A1R2E3N4D5E6R7I8N9G0E1N2 /* AudioRenderingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1R2E3N4D5E6R7I8N9G0E1N3 /* AudioRenderingEngine.swift */; };
+		V3P4I5C6K7E8R9V0I1E2W3S4 /* VideoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = V3P4I5C6K7E8R9V0I1E2W3S5 /* VideoPicker.swift */; };
+		C0M1P2S3S4T5O6R7E8F9 /* CompositionSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0M1P2S3S4T5O6R7E9F0 /* CompositionSessionStore.swift */; };
+		V5I6M7P8O9R0T1P2K3 /* VideoImportPickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = V5I6M7P8O9R0T1P3K4 /* VideoImportPickers.swift */; };
+		V4B5A6C7K8G9R0O1U2N3D4V5 /* VideoBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = V4B5A6C7K8G9R0O1U2N3D4V6 /* VideoBackgroundView.swift */; };
+		T1R2A3C4K5E6F7F8E9C0T1S2 /* TrackAudioEffectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1R2A3C4K5E6F7F8E9C0T1S3 /* TrackAudioEffectsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,6 +96,7 @@
 		95C633B42ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenAmbiWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		95C633B62ED8644E0051DBA3 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		95C633B82ED8644E0051DBA3 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		95D256A32F013D990027785E /* AmbientBackgroundSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientBackgroundSystem.swift; sourceTree = "<group>"; };
 		95FF089E2ED47D0200383F10 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* AmbientMixerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientMixerView.swift; sourceTree = "<group>"; };
 		A3B4C5D6E7F8A9B0C1D2E4 /* KodeMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-Bold.ttf"; sourceTree = "<group>"; };
@@ -108,9 +121,20 @@
 		F7A8B9C0D1E2F3A4B5C6D7E9 /* FrequencyGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyGenerator.swift; sourceTree = "<group>"; };
 		F8A9B0C1D2E3F4A5B6C7D8E9F1 /* FrequencyPresetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyPresetService.swift; sourceTree = "<group>"; };
 		F9A8B7C6D5E4F3A2B1C0D9E9 /* Soundscape3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Soundscape3DView.swift; sourceTree = "<group>"; };
+		L1O2C3A4L5R6E7C8O9R0D1I3 /* LocalRecordingStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRecordingStorage.swift; sourceTree = "<group>"; };
+		P1E2R3M4I5S6S7I8O9N0S1M3 /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
 		P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditView.swift; sourceTree = "<group>"; };
+		R1E2C3O4R5D6I7N8G9S0Y1N3 /* RecordingSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSyncService.swift; sourceTree = "<group>"; };
 		S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		V1A2S3T4O5R6E7S8W9I0F1T3 /* VideoAssetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoAssetStore.swift; sourceTree = "<group>"; };
+		V2P3R4O5C6S7E8R9V0I1C2E4 /* VideoProcessingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessingService.swift; sourceTree = "<group>"; };
+		A1R2E3N4D5E6R7I8N9G0E1N3 /* AudioRenderingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRenderingEngine.swift; sourceTree = "<group>"; };
+		V3P4I5C6K7E8R9V0I1E2W3S5 /* VideoPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPicker.swift; sourceTree = "<group>"; };
+		C0M1P2S3S4T5O6R7E9F0 /* CompositionSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionSessionStore.swift; sourceTree = "<group>"; };
+		V5I6M7P8O9R0T1P3K4 /* VideoImportPickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoImportPickers.swift; sourceTree = "<group>"; };
+		V4B5A6C7K8G9R0O1U2N3D4V6 /* VideoBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoBackgroundView.swift; sourceTree = "<group>"; };
+		T1R2A3C4K5E6F7F8E9C0T1S3 /* TrackAudioEffectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAudioEffectsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -162,6 +186,7 @@
 		5F436B51046481B1EEB5CE05 /* openambi-studio */ = {
 			isa = PBXGroup;
 			children = (
+				95D256A32F013D990027785E /* AmbientBackgroundSystem.swift */,
 				953F37C42EEDE10E007EA25C /* EditRecordingView.swift */,
 				953F37C22EEDD240007EA25C /* UserRecordingsView.swift */,
 				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
@@ -179,8 +204,13 @@
 				C1D2E3F4A5B6C7D8E9F0A2 /* ProfileButton.swift */,
 				C9D0E1F2A3B4C5D6E7F8AA /* SimpleLoadingView.swift */,
 				S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */,
-				P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */,
-				F1A2B3C4D5E6F7A8B9C0D1E2 /* Models */,
+			P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */,
+			V3P4I5C6K7E8R9V0I1E2W3S5 /* VideoPicker.swift */,
+			C0M1P2S3S4T5O6R7E9F0 /* CompositionSessionStore.swift */,
+			V5I6M7P8O9R0T1P3K4 /* VideoImportPickers.swift */,
+			V4B5A6C7K8G9R0O1U2N3D4V6 /* VideoBackgroundView.swift */,
+			T1R2A3C4K5E6F7F8E9C0T1S3 /* TrackAudioEffectsView.swift */,
+			F1A2B3C4D5E6F7A8B9C0D1E2 /* Models */,
 				F2A3B4C5D6E7F8A9B0C1D2E3 /* Services */,
 				F3A4B5C6D7E8F9A0B1C2D3E4 /* Config */,
 				F5A6B7C8D9E0F1A2B3C4D5E8 /* Intents */,
@@ -220,8 +250,14 @@
 				F7A8B9C0D1E2F3A4B5C6D7E9 /* FrequencyGenerator.swift */,
 				F8A9B0C1D2E3F4A5B6C7D8E9F1 /* FrequencyPresetService.swift */,
 				S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */,
-			);
-			path = Services;
+				L1O2C3A4L5R6E7C8O9R0D1I3 /* LocalRecordingStorage.swift */,
+				R1E2C3O4R5D6I7N8G9S0Y1N3 /* RecordingSyncService.swift */,
+			P1E2R3M4I5S6S7I8O9N0S1M3 /* PermissionsManager.swift */,
+			V1A2S3T4O5R6E7S8W9I0F1T3 /* VideoAssetStore.swift */,
+			V2P3R4O5C6S7E8R9V0I1C2E4 /* VideoProcessingService.swift */,
+			A1R2E3N4D5E6R7I8N9G0E1N3 /* AudioRenderingEngine.swift */,
+		);
+		path = Services;
 			sourceTree = "<group>";
 		};
 		F3A4B5C6D7E8F9A0B1C2D3E4 /* Config */ = {
@@ -386,10 +422,22 @@
 				P1R2O3F4I5L6E7E8D9I0T1V2 /* ProfileEditView.swift in Sources */,
 				953F37B32EE3A793007EA25C /* RecordingManager.swift in Sources */,
 				S2E3T4I5N6G7S8V9I0E1W4 /* SettingsManager.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		95C633B02ED8644E0051DBA3 /* Sources */ = {
+				L1O2C3A4L5R6E7C8O9R0D1I2 /* LocalRecordingStorage.swift in Sources */,
+				95D256A42F013D990027785E /* AmbientBackgroundSystem.swift in Sources */,
+				R1E2C3O4R5D6I7N8G9S0Y1N2 /* RecordingSyncService.swift in Sources */,
+			P1E2R3M4I5S6S7I8O9N0S1M2 /* PermissionsManager.swift in Sources */,
+			V1A2S3T4O5R6E7S8W9I0F1T2 /* VideoAssetStore.swift in Sources */,
+			V2P3R4O5C6S7E8R9V0I1C2E3 /* VideoProcessingService.swift in Sources */,
+			A1R2E3N4D5E6R7I8N9G0E1N2 /* AudioRenderingEngine.swift in Sources */,
+			V3P4I5C6K7E8R9V0I1E2W3S4 /* VideoPicker.swift in Sources */,
+			C0M1P2S3S4T5O6R7E8F9 /* CompositionSessionStore.swift in Sources */,
+			V5I6M7P8O9R0T1P2K3 /* VideoImportPickers.swift in Sources */,
+			V4B5A6C7K8G9R0O1U2N3D4V5 /* VideoBackgroundView.swift in Sources */,
+			T1R2A3C4K5E6F7F8E9C0T1S2 /* TrackAudioEffectsView.swift in Sources */,
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+	};
+	95C633B02ED8644E0051DBA3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -469,6 +517,7 @@
 				CODE_SIGN_ENTITLEMENTS = "openambi-studio/openambi-studio.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = LVH8Z2THG7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "openambi-studio/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = openambi;
@@ -533,6 +582,7 @@
 				CODE_SIGN_ENTITLEMENTS = "openambi-studio/openambi-studio.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = LVH8Z2THG7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "openambi-studio/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = openambi;

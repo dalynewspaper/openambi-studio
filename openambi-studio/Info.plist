@@ -23,9 +23,9 @@
 		</dict>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>OpenAmbi needs access to your microphone to record ambient sounds for your personal sound library.</string>
+	<string>OpenAmbi needs microphone access to record ambient sounds for your personal sound library. Your recordings are stored securely and only accessible to you.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>OpenAmbi would like to capture the location where you record sounds to help organize your recordings.</string>
+	<string>OpenAmbi uses your location to tag recordings with place names (e.g., "Beach Waves - Malibu"). Location is only captured when recording and stored privately with your recordings.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>OpenAmbi would like to capture photos to accompany your sound recordings.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -1,11 +1,76 @@
 import Foundation
 
+/// How to update `video_file_path` via `update_user_recording` RPC.
+enum UserRecordingVideoRPCPatch: Equatable {
+    case leaveUnchanged
+    /// Clears DB column; deletes optional object from `user-recording-videos` first.
+    case clearVideo(removingStorageObjectPath: String?)
+    /// Sets column after a successful upload (storage path under bucket root).
+    case setVideo(storagePath: String)
+}
+
 class SupabaseService: ObservableObject {
     private let supabaseUrl = SupabaseConfig.url
     private let supabaseKey = SupabaseConfig.anonKey
     
     // Use optimized URLSession with connection pooling
     private let urlSession = PerformanceOptimizer.shared.urlSession
+    
+    // MARK: - Query Caching (Performance Optimization)
+    // Cache query results to avoid redundant network requests
+    private struct CacheEntry {
+        let data: [AudioTrack]
+        let timestamp: Date
+    }
+    
+    private var queryCache: [String: CacheEntry] = [:]
+    private let cacheQueue = DispatchQueue(label: "com.openambi.queryCache", attributes: .concurrent)
+    private let cacheTTL: TimeInterval = 300 // 5 minutes cache TTL
+    
+    /// Get cached result if available and not expired
+    private func getCachedResult(for key: String) -> [AudioTrack]? {
+        return cacheQueue.sync {
+            guard let entry = queryCache[key],
+                  Date().timeIntervalSince(entry.timestamp) < cacheTTL else {
+                // Cache expired or doesn't exist
+                queryCache.removeValue(forKey: key)
+                return nil
+            }
+            print("✅ Using cached query result for: \(key)")
+            return entry.data
+        }
+    }
+    
+    /// Store query result in cache
+    private func cacheResult(_ data: [AudioTrack], for key: String) {
+        cacheQueue.async(flags: .barrier) {
+            self.queryCache[key] = CacheEntry(data: data, timestamp: Date())
+            print("💾 Cached query result for: \(key) (\(data.count) items)")
+        }
+    }
+    
+    /// Clear cache (useful when data changes)
+    func clearCache() {
+        cacheQueue.async(flags: .barrier) {
+            self.queryCache.removeAll()
+            print("🗑️ Cleared query cache")
+        }
+    }
+    
+    /// Clear cache for a specific user's recordings (useful when recordings are saved/updated/deleted)
+    /// Returns synchronously to ensure cache is cleared before next fetch
+    func clearUserRecordingsCache(userId: UUID) {
+        cacheQueue.sync(flags: .barrier) {
+            let prefix = "user_recordings_\(userId.uuidString)"
+            let keysToRemove = self.queryCache.keys.filter { $0.hasPrefix(prefix) }
+            for key in keysToRemove {
+                self.queryCache.removeValue(forKey: key)
+            }
+            if !keysToRemove.isEmpty {
+                print("🗑️ Cleared cache for user recordings: \(keysToRemove.count) entry(ies)")
+            }
+        }
+    }
     
     // MARK: - Helper: Create Authenticated Request
     private func createRequest(url: URL, method: String = "GET", accessToken: String? = nil) -> URLRequest {
@@ -26,6 +91,12 @@ class SupabaseService: ObservableObject {
     
     // MARK: - Fetch Audio Tracks
     func fetchAudioTracks() async throws -> [AudioTrack] {
+        // Check cache first (instant return if available)
+        let cacheKey = "audio_tracks"
+        if let cachedResult = getCachedResult(for: cacheKey) {
+            return cachedResult
+        }
+        
         // Try ambient_sounds table first (matches your storage bucket name)
         let tableNames = ["ambient_sounds", "audio_tracks"]
         
@@ -72,7 +143,7 @@ class SupabaseService: ObservableObject {
             }
             
             // Convert Supabase format to AudioTrack, filtering out excluded tracks
-            return supabaseTracks
+            let tracks = supabaseTracks
                 .filter { !excludedTrackNames.contains($0.name) }
                 .map { supabaseTrack in
                 // Construct full audio URL from file_path
@@ -122,6 +193,12 @@ class SupabaseService: ObservableObject {
                     
                     return track
             }
+            
+            // Cache the result for faster subsequent loads
+            cacheResult(tracks, for: cacheKey)
+            
+            return tracks
+            
         } catch {
                 print("ℹ️ Error trying table '\(tableName)': \(error.localizedDescription)")
                 continue // Try next table
@@ -130,7 +207,9 @@ class SupabaseService: ObservableObject {
         
         // If all tables failed, return empty array (only use tracks from Supabase)
         print("⚠️ No valid tables found in Supabase - returning empty array")
-            return []
+        let emptyResult: [AudioTrack] = []
+        cacheResult(emptyResult, for: cacheKey) // Cache empty result to avoid repeated failed queries
+        return emptyResult
     }
     
     // MARK: - Fetch Presets
@@ -290,8 +369,98 @@ class SupabaseService: ObservableObject {
         ]
     }
     
+    /// Parses `{folder}/{file}` from `{storageURL}/object/public/{bucket}/...`.
+    func extractObjectPathFromPublicStorageURL(_ urlString: String, bucket: String) -> String? {
+        let needle = "/object/public/\(bucket)/"
+        guard let range = urlString.range(of: needle) else { return nil }
+        let suffix = String(urlString[range.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !suffix.isEmpty else { return nil }
+        return suffix.removingPercentEncoding ?? suffix
+    }
+
+    /// Deletes one object (best-effort; ignores network failures and 404).
+    private func deleteStorageObject(bucket: String, objectPath: String, accessToken: String) async {
+        let encodedPath = objectPath.split(separator: "/").map { segment -> String in
+            String(segment).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(segment)
+        }.joined(separator: "/")
+
+        guard let url = URL(string: "\(SupabaseConfig.storageURL)/object/\(bucket)/\(encodedPath)") else {
+            print("⚠️ Invalid storage delete URL for \(bucket)/\(objectPath)")
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseKey, forHTTPHeaderField: "apikey")
+
+        do {
+            let (data, response) = try await urlSession.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return }
+            if (200...299).contains(http.statusCode) {
+                print("✅ Deleted storage object \(bucket)/\(objectPath)")
+            } else if http.statusCode == 404 {
+                print("ℹ️ Storage object already absent: \(bucket)/\(objectPath)")
+            } else {
+                let msg = String(data: data, encoding: .utf8) ?? ""
+                print("⚠️ Storage delete \(bucket) HTTP \(http.statusCode): \(msg)")
+            }
+        } catch {
+            print("⚠️ Storage delete failed (\(bucket)): \(error.localizedDescription)")
+        }
+    }
+
+    /// Builds a public storage URL for an object path inside `user-recording-videos`.
+    private func publicUserRecordingVideoURL(storagePath: String) -> String {
+        let encoded = storagePath.split(separator: "/").map { segment -> String in
+            String(segment).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(segment)
+        }.joined(separator: "/")
+        return "\(SupabaseConfig.storageURL)/object/public/user-recording-videos/\(encoded)"
+    }
+
+    private func mimeTypeForVideoExtension(_ ext: String) -> String {
+        switch ext.lowercased() {
+        case "mp4", "m4v": return "video/mp4"
+        case "mov": return "video/quicktime"
+        default: return "video/quicktime"
+        }
+    }
+
+    /// Uploads video to `user-recording-videos` at `storagePath` (`{user_id}/{recording_id}.ext`).
+    private func uploadUserRecordingVideo(storagePath: String, fileURL: URL, accessToken: String) async throws {
+        let parts = storagePath.split(separator: "/")
+        guard parts.count == 2 else {
+            throw SupabaseError.networkError("Invalid video storage path")
+        }
+        let userFolder = String(parts[0]).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(parts[0])
+        let fileName = String(parts[1]).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(parts[1])
+        let storageURL = URL(string: "\(SupabaseConfig.storageURL)/object/user-recording-videos/\(userFolder)/\(fileName)")!
+
+        let ext = fileURL.pathExtension.lowercased()
+        var request = URLRequest(url: storageURL)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseKey, forHTTPHeaderField: "apikey")
+        request.setValue(mimeTypeForVideoExtension(ext.isEmpty ? "mov" : ext), forHTTPHeaderField: "Content-Type")
+        request.setValue("binary", forHTTPHeaderField: "x-upsert")
+
+        let fileData = try Data(contentsOf: fileURL)
+        request.httpBody = fileData
+
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw SupabaseError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else {
+            let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("❌ Video upload failed: \(http.statusCode) — \(msg)")
+            if msg.contains("Bucket not found") { throw SupabaseError.bucketNotFound }
+            throw SupabaseError.networkError(msg)
+        }
+        print("✅ Uploaded recording video to \(storagePath)")
+    }
+
     // MARK: - Upload Recording
     func uploadRecording(
+        recordingId: UUID,
         fileURL: URL,
         accessToken: String,
         userId: UUID,
@@ -303,11 +472,9 @@ class SupabaseService: ObservableObject {
         fileSize: Int64,
         locationName: String?,
         latitude: Double?,
-        longitude: Double?
+        longitude: Double?,
+        videoFileURL: URL? = nil
     ) async throws -> AudioTrack {
-        // Generate recording ID
-        let recordingId = UUID()
-        
         // Construct file path: {user_id}/{recording_id}.m4a
         // This matches: supabase.storage.from("user-recordings").upload(`${user.id}/${filename}`, fileBlob)
         let fileName = "\(recordingId.uuidString).m4a"
@@ -367,6 +534,15 @@ class SupabaseService: ObservableObject {
         }
         
         print("✅ Successfully uploaded recording to: \(filePath)")
+
+        var videoStoragePath: String?
+        if let videoFileURL = videoFileURL, FileManager.default.fileExists(atPath: videoFileURL.path) {
+            let ext = videoFileURL.pathExtension.isEmpty ? "mov" : videoFileURL.pathExtension.lowercased()
+            let path = "\(userId.uuidString)/\(recordingId.uuidString).\(ext)"
+            try await uploadUserRecordingVideo(storagePath: path, fileURL: videoFileURL, accessToken: accessToken)
+            videoStoragePath = path
+        }
+
         print("📝 Now attempting database insert...")
         
         // Create database entry using insert_user_recording function
@@ -400,7 +576,10 @@ class SupabaseService: ObservableObject {
         if let longitude = longitude {
             payload["p_longitude"] = longitude
         }
-        
+        if let videoStoragePath = videoStoragePath {
+            payload["p_video_file_path"] = videoStoragePath
+        }
+
         functionRequest.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
         print("🔧 Calling insert_user_recording function")
@@ -440,13 +619,16 @@ class SupabaseService: ObservableObject {
                 var dbRequest = createRequest(url: dbURL, method: "POST", accessToken: accessToken)
                 dbRequest.setValue("return=representation", forHTTPHeaderField: "Prefer")
                 
-                let directPayload: [String: Any] = [
+                var directPayload: [String: Any] = [
                     "id": recordingId.uuidString,
                     "user_id": userId.uuidString,
                     "file_path": filePath,
                     "duration_seconds": Int(duration)
                 ]
-                
+                if let videoStoragePath = videoStoragePath {
+                    directPayload["video_file_path"] = videoStoragePath
+                }
+
                 dbRequest.httpBody = try JSONSerialization.data(withJSONObject: directPayload)
                 
                 let (fallbackData, fallbackResponse) = try await urlSession.data(for: dbRequest)
@@ -474,7 +656,9 @@ class SupabaseService: ObservableObject {
         print("🎵 Constructed audio URL for playback: \(audioUrl)")
         print("🎵 Storage URL base: \(SupabaseConfig.storageURL)")
         print("🎵 File path: \(filePath)")
-        
+
+        let videoUrlString = videoStoragePath.map { publicUserRecordingVideoURL(storagePath: $0) }
+
         // Return AudioTrack
         return AudioTrack(
             id: recordingId,
@@ -483,6 +667,7 @@ class SupabaseService: ObservableObject {
             icon: icon,
             description: description,
             audioUrl: audioUrl,
+            videoUrl: videoUrlString,
             trackType: .audioFile,
             isActive: false,
             volume: 0.0,
@@ -497,7 +682,19 @@ class SupabaseService: ObservableObject {
     }
     
     // MARK: - Fetch User Recordings (for authenticated users)
-    func fetchUserRecordings(accessToken: String, userId: UUID, recordingId: UUID? = nil) async throws -> [AudioTrack] {
+    func fetchUserRecordings(accessToken: String, userId: UUID, recordingId: UUID? = nil, bypassCache: Bool = false) async throws -> [AudioTrack] {
+        // Create cache key based on user ID and optional recording ID
+        let cacheKey = "user_recordings_\(userId.uuidString)\(recordingId != nil ? "_\(recordingId!.uuidString)" : "")"
+        
+        // Check cache first (instant return if available) - unless bypassing cache
+        if !bypassCache, let cachedResult = getCachedResult(for: cacheKey) {
+            return cachedResult
+        }
+        
+        if bypassCache {
+            print("🔄 Bypassing cache for fresh fetch")
+        }
+        
         // Explicitly filter out deleted recordings (deleted_at IS NULL)
         // RLS policy should also handle this, but we add explicit filter for safety
         var urlString = "\(SupabaseConfig.apiURL)/user_recordings?user_id=eq.\(userId.uuidString)&deleted_at=is.null&select=*&order=created_at.desc"
@@ -564,6 +761,7 @@ class SupabaseService: ObservableObject {
             let audioTracks: [AudioTrack] = activeRecordings.compactMap { recording in
                 // Construct storage URL
                 let audioUrl = "\(SupabaseConfig.storageURL)/object/public/user-recordings/\(recording.file_path)"
+                let videoUrlString: String? = recording.video_file_path.map { publicUserRecordingVideoURL(storagePath: $0) }
                 print("🎵 Loading user recording: \(recording.name)")
                 print("🎵 Audio URL: \(audioUrl)")
                 print("🎵 File path from DB: \(recording.file_path)")
@@ -594,6 +792,7 @@ class SupabaseService: ObservableObject {
                     icon: recording.icon ?? iconForTrack(name: recordingName, category: recordingCategory),
                     description: recording.description,
                     audioUrl: audioUrl,
+                    videoUrl: videoUrlString,
                     trackType: .audioFile,
                     isActive: false,
                     volume: 0.0,
@@ -610,6 +809,9 @@ class SupabaseService: ObservableObject {
             print("✅ Converted to \(audioTracks.count) AudioTrack objects")
             print("📋 Final AudioTrack IDs: \(audioTracks.map { "\($0.name) (\($0.id.uuidString.prefix(8)))" }.joined(separator: ", "))")
             
+            // Cache the result for faster subsequent loads
+            cacheResult(audioTracks, for: cacheKey)
+            
             return audioTracks
         } catch {
             print("⚠️ Error fetching user recordings: \(error.localizedDescription)")
@@ -621,53 +823,91 @@ class SupabaseService: ObservableObject {
     }
     
     // MARK: - Update User Recording
+    /// Updates metadata via `update_user_recording`. Optional `videoPatch` updates `video_file_path` (requires RPC with video params deployed).
     func updateUserRecording(
         accessToken: String,
         recordingId: UUID,
         name: String,
         category: String,
         description: String?,
-        icon: String
+        icon: String,
+        videoPatch: UserRecordingVideoRPCPatch = .leaveUnchanged
     ) async throws {
-        // Use the update_user_recording function via RPC for better reliability
+        try await postUpdateUserRecordingRPC(
+            accessToken: accessToken,
+            recordingId: recordingId,
+            name: name,
+            category: category,
+            description: description,
+            icon: icon,
+            videoPatch: videoPatch
+        )
+    }
+
+    private func postUpdateUserRecordingRPC(
+        accessToken: String,
+        recordingId: UUID,
+        name: String,
+        category: String,
+        description: String?,
+        icon: String,
+        videoPatch: UserRecordingVideoRPCPatch
+    ) async throws {
+        if case .clearVideo(let pathOpt) = videoPatch {
+            if let path = pathOpt {
+                await deleteStorageObject(bucket: "user-recording-videos", objectPath: path, accessToken: accessToken)
+            }
+        }
+
         let functionURL = URL(string: "\(SupabaseConfig.apiURL)/rpc/update_user_recording")!
         var functionRequest = createRequest(url: functionURL, method: "POST", accessToken: accessToken)
         functionRequest.setValue("return=representation", forHTTPHeaderField: "Prefer")
         functionRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         var payload: [String: Any] = [
             "p_id": recordingId.uuidString,
             "p_name": name,
             "p_category": category,
             "p_icon": icon
         ]
-        
+
         if let description = description {
             payload["p_description"] = description
         } else {
             payload["p_description"] = NSNull()
         }
-        
+
+        switch videoPatch {
+        case .leaveUnchanged:
+            break
+        case .clearVideo:
+            payload["p_update_video"] = true
+            payload["p_video_file_path"] = NSNull()
+        case .setVideo(let storagePath):
+            payload["p_update_video"] = true
+            payload["p_video_file_path"] = storagePath
+        }
+
         functionRequest.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        
+
         print("🔧 Updating recording via function: \(recordingId)")
         print("🔧 Function URL: \(functionURL)")
         print("🔧 Payload: \(payload)")
         NSLog("🔧 UPDATE: Recording ID: %@, URL: %@", recordingId.uuidString, functionURL.absoluteString)
         NSLog("🔧 UPDATE: Payload: %@", String(describing: payload))
-        
+
         let (data, response) = try await urlSession.data(for: functionRequest)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SupabaseError.invalidResponse
         }
-        
+
         let responseBody = String(data: data, encoding: .utf8) ?? "Unknown"
         print("🔧 Update response status: \(httpResponse.statusCode)")
         print("🔧 Update response body: \(responseBody)")
         NSLog("🔧 UPDATE RESPONSE: Status %d", httpResponse.statusCode)
         NSLog("🔧 UPDATE RESPONSE BODY: %@", responseBody)
-        
+
         // Check for JWT expiration
         if httpResponse.statusCode == 401 {
             let errorMessage = responseBody.lowercased()
@@ -676,7 +916,7 @@ class SupabaseService: ObservableObject {
                 throw SupabaseError.unauthorized
             }
         }
-        
+
         guard (200...299).contains(httpResponse.statusCode) else {
             // Parse error response for better error message
             var errorDetails = "HTTP \(httpResponse.statusCode)"
@@ -689,11 +929,11 @@ class SupabaseService: ObservableObject {
                     errorDetails = "\(code): \(responseBody)"
                 }
             }
-            
+
             print("❌ Failed to update recording: \(httpResponse.statusCode)")
             print("❌ Error details: \(errorDetails)")
             print("❌ Full response: \(responseBody)")
-            
+
             // Handle "Recording not found" - for updates, this is an error (unlike delete which is idempotent)
             if httpResponse.statusCode == 400 && responseBody.lowercased().contains("recording not found") {
                 print("❌ Recording not found - cannot update non-existent recording")
@@ -701,17 +941,147 @@ class SupabaseService: ObservableObject {
                 // Create a more specific error
                 throw SupabaseError.networkError("Recording not found. The recording may have been deleted.")
             }
-            
+
             NSLog("❌ UPDATE ERROR: HTTP %d, Details: %@", httpResponse.statusCode, errorDetails)
             throw SupabaseError.networkError(errorDetails)
         }
-        
+
         print("✅ Successfully updated recording: \(recordingId)")
         NSLog("✅ UPDATE SUCCESS: Recording ID: %@", recordingId.uuidString)
     }
     
+    // MARK: - Upload Profile Image
+    func uploadProfileImage(accessToken: String, userId: UUID, imageData: Data) async throws -> String {
+        // Upload to avatars bucket
+        // Using avatars bucket for cleaner organization
+        let fileName = "\(userId.uuidString).jpg"
+        
+        // URL encode the filename to handle special characters
+        let encodedFileName = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? fileName
+        let storageURL = URL(string: "\(SupabaseConfig.storageURL)/object/avatars/\(encodedFileName)")!
+        
+        var uploadRequest = URLRequest(url: storageURL)
+        // Use PUT for upsert (update if exists, create if not)
+        uploadRequest.httpMethod = "PUT"
+        uploadRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        uploadRequest.setValue(supabaseKey, forHTTPHeaderField: "apikey")
+        uploadRequest.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        uploadRequest.setValue("true", forHTTPHeaderField: "x-upsert") // Upsert if exists (true, not "binary")
+        uploadRequest.setValue("\(imageData.count)", forHTTPHeaderField: "Content-Length")
+        
+        uploadRequest.httpBody = imageData
+        
+        print("📤 Uploading profile image: \(fileName) (\(imageData.count) bytes)")
+        print("📤 Upload URL: \(storageURL.absoluteString)")
+        NSLog("📤 AVATAR UPLOAD: URL: %@, Size: %d bytes", storageURL.absoluteString, imageData.count)
+        
+        let (uploadData, uploadResponse) = try await urlSession.data(for: uploadRequest)
+        
+        guard let httpResponse = uploadResponse as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+        
+        let responseBody = String(data: uploadData, encoding: .utf8) ?? "Unknown"
+        print("📤 Upload response status: \(httpResponse.statusCode)")
+        print("📤 Upload response body: \(responseBody)")
+        NSLog("📤 AVATAR UPLOAD RESPONSE: Status %d, Body: %@", httpResponse.statusCode, responseBody)
+        
+        // 200 = success, 201 = created, 409 = conflict (but with upsert should be 200)
+        guard (200...299).contains(httpResponse.statusCode) else {
+            print("❌ Failed to upload profile image: \(httpResponse.statusCode) - \(responseBody)")
+            
+            if httpResponse.statusCode == 401 {
+                throw SupabaseError.unauthorized
+            } else if httpResponse.statusCode == 403 {
+                throw SupabaseError.forbidden
+            } else {
+                throw SupabaseError.networkError("Failed to upload image: HTTP \(httpResponse.statusCode) - \(responseBody)")
+            }
+        }
+        
+        // Construct public URL for the uploaded image
+        let publicURL = "\(SupabaseConfig.url)/storage/v1/object/public/avatars/\(fileName)"
+        print("✅ Successfully uploaded profile image: \(publicURL)")
+        NSLog("✅ AVATAR UPLOAD SUCCESS: %@", publicURL)
+        return publicURL
+    }
+    
+    // MARK: - Update User Profile
+    func updateUserProfile(accessToken: String, displayName: String, username: String? = nil, photoURL: String? = nil) async throws {
+        // Update user metadata via Supabase Auth API
+        let url = URL(string: "\(supabaseUrl)/auth/v1/user")!
+        var request = createRequest(url: url, method: "PUT", accessToken: accessToken)
+        
+        // Build user_metadata dictionary
+        var userMetadata: [String: Any] = [
+            "display_name": displayName
+        ]
+        
+        // Add username if provided
+        if let username = username, !username.isEmpty {
+            userMetadata["username"] = username.lowercased().trimmingCharacters(in: .whitespaces)
+        }
+        
+        // Add photo URL if provided
+        if let photoURL = photoURL {
+            userMetadata["avatar_url"] = photoURL
+        }
+        
+        let body: [String: Any] = [
+            "user_metadata": userMetadata
+        ]
+        
+        // Also update avatar_url at root level for Supabase Auth compatibility
+        var updateBody: [String: Any] = [
+            "user_metadata": userMetadata
+        ]
+        if let photoURL = photoURL {
+            updateBody["avatar_url"] = photoURL
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: updateBody)
+        
+        print("📝 Updating user profile with display name: \(displayName), username: \(username ?? "nil"), photoURL: \(photoURL ?? "nil")")
+        
+        let (data, response) = try await urlSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown"
+            print("❌ Failed to update user profile: \(httpResponse.statusCode)")
+            print("❌ Error body: \(errorBody)")
+            
+            if httpResponse.statusCode == 401 {
+                throw SupabaseError.unauthorized
+            } else if httpResponse.statusCode == 403 {
+                throw SupabaseError.forbidden
+            } else {
+                throw SupabaseError.networkError("Failed to update profile: \(errorBody)")
+            }
+        }
+        
+        print("✅ Successfully updated user profile")
+    }
+    
     // MARK: - Delete User Recording
-    func deleteUserRecording(accessToken: String, recordingId: UUID) async throws {
+    func deleteUserRecording(accessToken: String, recordingId: UUID, userId: UUID) async throws {
+        // Best-effort storage cleanup while the row still exists (paths from fresh fetch).
+        if let tracks = try? await fetchUserRecordings(accessToken: accessToken, userId: userId, recordingId: recordingId, bypassCache: true),
+           let track = tracks.first {
+            if track.audioUrl.hasPrefix("http"),
+               let audioPath = extractObjectPathFromPublicStorageURL(track.audioUrl, bucket: "user-recordings") {
+                await deleteStorageObject(bucket: "user-recordings", objectPath: audioPath, accessToken: accessToken)
+            }
+            if let vu = track.videoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+               vu.hasPrefix("http"),
+               let videoPath = extractObjectPathFromPublicStorageURL(vu, bucket: "user-recording-videos") {
+                await deleteStorageObject(bucket: "user-recording-videos", objectPath: videoPath, accessToken: accessToken)
+            }
+        }
+
         // Use the delete_user_recording function via RPC for better reliability
         let functionURL = URL(string: "\(SupabaseConfig.apiURL)/rpc/delete_user_recording")!
         var functionRequest = createRequest(url: functionURL, method: "POST", accessToken: accessToken)
@@ -793,10 +1163,6 @@ class SupabaseService: ObservableObject {
         
         print("✅ Successfully deleted recording from database: \(recordingId)")
         NSLog("✅ DELETE SUCCESS: Recording ID: %@", recordingId.uuidString)
-        
-        // Note: Storage file deletion would require additional API call
-        // For now, we'll just delete the database entry
-        // TODO: Add storage file deletion if needed
     }
 }
 
@@ -834,6 +1200,8 @@ private struct SupabaseUserRecording: Codable {
     let location_name: String?
     let latitude: Double?
     let longitude: Double?
+    /// Storage path under `user-recording-videos` (nullable).
+    let video_file_path: String?
     let recorded_at: String?
     let created_at: String?
     let updated_at: String?

@@ -306,7 +306,7 @@ class FrequencyGenerator: ObservableObject {
     // MARK: - Volume Ramping
     
     /// Smoothly ramp volume over specified duration
-    private func rampVolume(trackId: UUID, to targetVolume: Float, duration: TimeInterval) {
+    func rampVolume(trackId: UUID, to targetVolume: Float, duration: TimeInterval) {
         guard let playerNode = playerNodes[trackId] else { return }
         
         let startVolume = playerNode.volume
