@@ -241,8 +241,112 @@ struct LiquidGlass: ViewModifier {
 }
 
 extension View {
+    @ViewBuilder
     func liquidGlass(intensity: Double = 1.0, cornerRadius: CGFloat = 20, blurIntensity: LiquidGlass.BlurIntensity = .light, opacityLevel: LiquidGlass.OpacityLevel = .content) -> some View {
-        modifier(LiquidGlass(intensity: intensity, cornerRadius: cornerRadius, blurIntensity: blurIntensity, opacityLevel: opacityLevel))
+        // Check if liquid glass effects are enabled
+        let effectsEnabled = SettingsManager.shared.liquidGlassEffects
+        if effectsEnabled {
+            modifier(LiquidGlass(intensity: intensity, cornerRadius: cornerRadius, blurIntensity: blurIntensity, opacityLevel: opacityLevel))
+        } else {
+            // Return view with simple background instead of liquid glass
+            self.background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Color.white.opacity(0.1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+    }
+}
+
+// MARK: - Phase 1: Enhanced Liquid Glass for Controls & Navigation
+enum LiquidGlassVariant {
+    case regular  // For most controls and navigation (blurs background, maintains legibility)
+    case clear    // For components over visually rich backgrounds (highly translucent)
+}
+
+// MARK: - Liquid Glass Control Modifier (for controls and navigation)
+struct LiquidGlassControl: ViewModifier {
+    var variant: LiquidGlassVariant = .regular
+    var cornerRadius: CGFloat = 0 // 0 = no corner radius (for full-width elements)
+    var opacity: Double = 0.90 // Higher opacity for controls (0.85-0.95 range)
+    
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack {
+                    // Base material - use regular material for controls
+                    Rectangle()
+                        .fill(.regularMaterial)
+                        .opacity(variant == .clear ? 0.6 : opacity)
+                    
+                    // For clear variant, add dimming layer if needed
+                    if variant == .clear {
+                        Rectangle()
+                            .fill(Color.black.opacity(0.35))
+                            .blendMode(.multiply)
+                    }
+                }
+            }
+            .clipShape(cornerRadius > 0 ? AnyShape(RoundedRectangle(cornerRadius: cornerRadius)) : AnyShape(Rectangle()))
+    }
+}
+
+// Helper to fix type mismatch in ternary expressions
+struct AnyShape: Shape {
+    private let _path: (CGRect) -> Path
+    
+    init<S: Shape>(_ shape: S) {
+        _path = shape.path(in:)
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        _path(rect)
+    }
+}
+
+// MARK: - Liquid Glass Content Modifier (for content layer - uses standard materials)
+struct LiquidGlassContent: ViewModifier {
+    var material: Material = .ultraThin
+    var cornerRadius: CGFloat = 20
+    var opacity: Double = 1.0
+    
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(material)
+                    .opacity(opacity)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - View Extensions for Phase 1
+extension View {
+    /// Liquid Glass for controls and navigation (functional layer)
+    /// Use this for: tab bars, navigation bars, toolbars, buttons, popovers
+    @ViewBuilder
+    func liquidGlassControl(variant: LiquidGlassVariant = .regular, cornerRadius: CGFloat = 0, opacity: Double = 0.90) -> some View {
+        let effectsEnabled = SettingsManager.shared.liquidGlassEffects
+        if effectsEnabled {
+            modifier(LiquidGlassControl(variant: variant, cornerRadius: cornerRadius, opacity: opacity))
+        } else {
+            // Fallback to simple background
+            self.background(
+                Rectangle()
+                    .fill(Color.white.opacity(0.1))
+                    .clipShape(cornerRadius > 0 ? AnyShape(RoundedRectangle(cornerRadius: cornerRadius)) : AnyShape(Rectangle()))
+            )
+        }
+    }
+    
+    /// Standard materials for content layer
+    /// Use this for: cards, panels, list items, content backgrounds
+    func liquidGlassContent(material: Material = .ultraThin, cornerRadius: CGFloat = 20, opacity: Double = 1.0) -> some View {
+        modifier(LiquidGlassContent(material: material, cornerRadius: cornerRadius, opacity: opacity))
     }
 }
 
@@ -452,30 +556,41 @@ struct AppTypography {
     }
 }
 
-// MARK: - Spacing System (Liquid Glass - Premium Spacing Inspired by Calm/Headspace)
+// MARK: - Phase 7: Design Tokens - Spacing System
+/// Comprehensive spacing system following 8pt grid
 struct AppSpacing {
-    // Base spacing (premium, generous spacing for clean design)
-    static let xs: CGFloat = 8   // 0.5x - minimal spacing
-    static let sm: CGFloat = 16  // 1x - standard spacing (increased for premium feel)
-    static let md: CGFloat = 24  // 1.5x - comfortable spacing (increased)
-    static let lg: CGFloat = 40  // 2.5x - generous spacing (increased)
-    static let xl: CGFloat = 56  // 3.5x - extra generous (increased)
-    static let xxl: CGFloat = 80 // 5x - maximum spacing (increased)
+    // Base spacing (8pt grid system)
+    static let xs: CGFloat = 8   // 1x - minimal spacing
+    static let sm: CGFloat = 16  // 2x - standard spacing
+    static let md: CGFloat = 24  // 3x - comfortable spacing
+    static let lg: CGFloat = 40  // 5x - generous spacing
+    static let xl: CGFloat = 56  // 7x - extra generous
+    static let xxl: CGFloat = 80 // 10x - maximum spacing
     
-    // Component-specific spacing (premium, inspired by calm.com/headspace)
-    static let orbMinDistance: CGFloat = 180 // Minimum between orbs (more breathing room)
-    static let dockItemSpacing: CGFloat = 28  // Dock items (more space between)
-    static let dockPadding: CGFloat = 40      // Dock padding (more generous)
-    static let edgePadding: CGFloat = 40      // Edge padding (more generous for premium feel)
+    // Icon spacing (Phase 3: Circular Design)
+    static let iconSpacing: CGFloat = 16      // Between icons
+    static let iconContainer: CGFloat = 56     // Base icon size (primary)
+    static let iconContainerSecondary: CGFloat = 48  // Secondary icon size
+    static let iconContainerTertiary: CGFloat = 40    // Tertiary icon size
     
-    // Liquid Glass specific (premium spacing)
-    static let tapTarget: CGFloat = 48        // Minimum tap target (larger for comfort)
-    static let elementSpacing: CGFloat = 28   // Between interactive elements (more space)
-    static let sectionSpacing: CGFloat = 48   // Between major sections (more breathing room)
-    static let cardPadding: CGFloat = 28       // Inside cards/panels (more generous)
+    // Material spacing (Phase 6: Content Materials)
+    static let materialPadding: CGFloat = 20  // Inside materials
+    static let materialGap: CGFloat = 12      // Between material elements
+    
+    // Component-specific spacing
+    static let orbMinDistance: CGFloat = 180  // Minimum between orbs
+    static let dockItemSpacing: CGFloat = 28   // Dock items
+    static let dockPadding: CGFloat = 40       // Dock padding
+    static let edgePadding: CGFloat = 40       // Edge padding
+    
+    // Interactive elements (Phase 5: Motion)
+    static let tapTarget: CGFloat = 48        // Minimum tap target (Apple HIG)
+    static let elementSpacing: CGFloat = 28    // Between interactive elements
+    static let sectionSpacing: CGFloat = 48    // Between major sections
+    static let cardPadding: CGFloat = 28       // Inside cards/panels
     
     // Safe area specific
-    static let safeAreaTopPadding: CGFloat = 8   // Additional padding above safe area
+    static let safeAreaTopPadding: CGFloat = 8    // Additional padding above safe area
     static let safeAreaBottomPadding: CGFloat = 12 // Additional padding below safe area
 }
 
@@ -551,14 +666,67 @@ struct AppTheme {
     
     // Animation constants
     struct Animation {
-        static let spring = SwiftUI.Animation.spring(response: 0.4, dampingFraction: 0.8)
-        static let smooth = SwiftUI.Animation.easeInOut(duration: 0.3)
-        static let quick = SwiftUI.Animation.easeInOut(duration: 0.2)
+        // Instant animation (effectively no animation)
+        private static let noAnimation = SwiftUI.Animation.linear(duration: 0)
+        
+        static func spring(reduceMotion: Bool = false) -> SwiftUI.Animation {
+            reduceMotion ? noAnimation : .spring(response: 0.4, dampingFraction: 0.8)
+        }
+        
+        static func smooth(reduceMotion: Bool = false) -> SwiftUI.Animation {
+            reduceMotion ? noAnimation : .easeInOut(duration: 0.3)
+        }
+        
+        static func quick(reduceMotion: Bool = false) -> SwiftUI.Animation {
+            reduceMotion ? noAnimation : .easeInOut(duration: 0.2)
+        }
         
         // Liquid Glass specific animations
-        static let liquidSpring = SwiftUI.Animation.spring(response: 0.5, dampingFraction: 0.75)
-        static let fluid = SwiftUI.Animation.easeInOut(duration: 0.4)
-        static let micro = SwiftUI.Animation.easeOut(duration: 0.2)
+        static func liquidSpring(reduceMotion: Bool = false) -> SwiftUI.Animation {
+            reduceMotion ? noAnimation : .spring(response: 0.5, dampingFraction: 0.75)
+        }
+        
+        static func fluid(reduceMotion: Bool = false) -> SwiftUI.Animation {
+            reduceMotion ? noAnimation : .easeInOut(duration: 0.4)
+        }
+        
+        static func micro(reduceMotion: Bool = false) -> SwiftUI.Animation {
+            reduceMotion ? noAnimation : .easeOut(duration: 0.2)
+        }
+        
+        // Legacy static properties for backward compatibility (will respect reduce motion via helper)
+        static var spring: SwiftUI.Animation {
+            shouldReduceMotion() ? noAnimation : .spring(response: 0.4, dampingFraction: 0.8)
+        }
+        
+        static var smooth: SwiftUI.Animation {
+            shouldReduceMotion() ? noAnimation : .easeInOut(duration: 0.3)
+        }
+        
+        static var quick: SwiftUI.Animation {
+            shouldReduceMotion() ? noAnimation : .easeInOut(duration: 0.2)
+        }
+        
+        static var liquidSpring: SwiftUI.Animation {
+            shouldReduceMotion() ? noAnimation : .spring(response: 0.5, dampingFraction: 0.75)
+        }
+        
+        static var fluid: SwiftUI.Animation {
+            shouldReduceMotion() ? noAnimation : .easeInOut(duration: 0.4)
+        }
+        
+        static var micro: SwiftUI.Animation {
+            shouldReduceMotion() ? noAnimation : .easeOut(duration: 0.2)
+        }
+        
+        // Helper to check if motion should be reduced
+        static func shouldReduceMotion() -> Bool {
+            #if canImport(UIKit)
+            return UIAccessibility.isReduceMotionEnabled || SettingsManager.shared.reduceMotion
+            #else
+            return SettingsManager.shared.reduceMotion
+            #endif
+        }
     }
     
     // Blur intensity scale (for reference)
@@ -575,5 +743,813 @@ struct AppTheme {
         static let content: (min: Double, max: Double) = (0.6, 0.8)      // Content layer
         static let controls: (min: Double, max: Double) = (0.8, 0.95)    // Control layer
         static let text: (min: Double, max: Double) = (1.0, 1.0)         // Text layer
+    }
+}
+
+// MARK: - Phase 8: Design Tokens
+
+/// Material opacity scale for consistent material usage
+struct MaterialOpacity {
+    // Liquid Glass (controls/navigation)
+    struct LiquidGlass {
+        static let control: (min: Double, max: Double) = (0.85, 0.95)      // Control elements
+        static let navigation: (min: Double, max: Double) = (0.90, 0.95) // Navigation bars
+        static let button: (min: Double, max: Double) = (0.85, 0.95)      // Buttons
+    }
+    
+    // Standard Materials (content)
+    struct Standard {
+        static let ultraThin: (min: Double, max: Double) = (0.25, 0.45)  // Subtle separation
+        static let thin: (min: Double, max: Double) = (0.45, 0.65)       // More definition
+        static let regular: (min: Double, max: Double) = (0.65, 0.85)    // Strong separation
+        static let thick: (min: Double, max: Double) = (0.85, 0.95)      // Dark overlays
+    }
+    
+    // Helper to get opacity value
+    static func liquidGlass(_ type: LiquidGlassType = .control) -> Double {
+        switch type {
+        case .control:
+            return LiquidGlass.control.max
+        case .navigation:
+            return LiquidGlass.navigation.max
+        case .button:
+            return LiquidGlass.button.max
+        }
+    }
+    
+    static func standard(_ type: StandardType = .thin) -> Double {
+        switch type {
+        case .ultraThin:
+            return Standard.ultraThin.max
+        case .thin:
+            return Standard.thin.max
+        case .regular:
+            return Standard.regular.max
+        case .thick:
+            return Standard.thick.max
+        }
+    }
+    
+    enum LiquidGlassType {
+        case control
+        case navigation
+        case button
+    }
+    
+    enum StandardType {
+        case ultraThin
+        case thin
+        case regular
+        case thick
+    }
+}
+
+/// Animation timing constants for consistent animations
+struct AnimationTiming {
+    // Ambient animations (slow, continuous)
+    struct Ambient {
+        static let particleDrift: TimeInterval = 120  // 2 minutes per cycle
+        static let waveCycle: TimeInterval = 10      // 10 seconds per cycle
+        static let fogPulse: TimeInterval = 45       // 45 seconds per cycle
+        static let depthBreathing: TimeInterval = 60 // 60 seconds per cycle
+    }
+    
+    // Interactive animations (quick, responsive)
+    struct Interactive {
+        static let buttonPress: TimeInterval = 0.2   // Button press feedback
+        static let tap: TimeInterval = 0.15           // Tap feedback
+        static let transition: TimeInterval = 0.4     // View transitions
+        static let smooth: TimeInterval = 0.3         // Smooth transitions
+        static let quick: TimeInterval = 0.2          // Quick transitions
+        static let micro: TimeInterval = 0.15         // Micro-interactions
+    }
+    
+    // Spring physics
+    struct Spring {
+        static let interactive: (response: Double, damping: Double) = (0.3, 0.7)  // Interactive feedback
+        static let transition: (response: Double, damping: Double) = (0.4, 0.8)   // Transitions
+        static let liquid: (response: Double, damping: Double) = (0.5, 0.75)       // Liquid Glass
+    }
+    
+    // Helper to create spring animation
+    static func spring(_ type: SpringType = .interactive) -> SwiftUI.Animation {
+        let config: (response: Double, damping: Double)
+        switch type {
+        case .interactive:
+            config = Spring.interactive
+        case .transition:
+            config = Spring.transition
+        case .liquid:
+            config = Spring.liquid
+        }
+        
+        if MotionSystem.shouldReduceMotion {
+            return .linear(duration: 0)
+        }
+        
+        return .spring(response: config.response, dampingFraction: config.damping)
+    }
+    
+    enum SpringType {
+        case interactive
+        case transition
+        case liquid
+    }
+}
+
+// MARK: - Phase 4: Color & Contrast System
+/// Vibrant color system for proper contrast on materials
+struct AppColors {
+    // Text colors on materials (vibrant for proper contrast)
+    static let primaryText = Color.white // For dark mode backgrounds
+    static let secondaryText = Color.white.opacity(0.8) // For secondary content
+    static let tertiaryText = Color.white.opacity(0.6) // For tertiary content
+    static let quaternaryText = Color.white.opacity(0.4) // For quaternary content
+    
+    // System colors (adapt to light/dark mode)
+    static let label = Color.primary // Adapts to light/dark
+    static let secondaryLabel = Color.secondary // Adapts to light/dark
+    static let tertiaryLabel = Color(uiColor: .tertiaryLabel) // System tertiary
+    static let quaternaryLabel = Color(uiColor: .quaternaryLabel) // System quaternary
+    
+    // Icon colors
+    static let iconActive = Color.white // For active icons
+    static let iconInactive = Color.white.opacity(0.9) // For inactive icons
+    static let iconDisabled = Color.white.opacity(0.4) // For disabled icons
+    
+    // Helper function to get vibrant text color for dark backgrounds
+    static func textOnMaterial(level: TextLevel = .primary) -> Color {
+        switch level {
+        case .primary:
+            return primaryText
+        case .secondary:
+            return secondaryText
+        case .tertiary:
+            return tertiaryText
+        case .quaternary:
+            return quaternaryText
+        }
+    }
+    
+    enum TextLevel {
+        case primary
+        case secondary
+        case tertiary
+        case quaternary
+    }
+}
+
+// MARK: - Color Extension for Dynamic Adaptation
+extension Color {
+    /// Returns a color that adapts to light/dark mode
+    static func adaptive(light: Color, dark: Color) -> Color {
+        #if os(iOS)
+        return Color(UIColor { traitCollection in
+            switch traitCollection.userInterfaceStyle {
+            case .light:
+                return UIColor(light)
+            case .dark:
+                return UIColor(dark)
+            default:
+                return UIColor(dark)
+            }
+        })
+        #else
+        return dark
+        #endif
+    }
+    
+    /// Returns a color that works in increased contrast mode
+    static func highContrast(_ baseColor: Color, increased: Color) -> Color {
+        #if os(iOS)
+        return Color(UIColor { traitCollection in
+            if traitCollection.accessibilityContrast == .high {
+                return UIColor(increased)
+            }
+            return UIColor(baseColor)
+        })
+        #else
+        return baseColor
+        #endif
+    }
+}
+
+// MARK: - Phase 6: Content Layer Materials
+/// Standard materials for content (not Liquid Glass)
+struct ContentMaterial {
+    /// Material types for content
+    enum MaterialType {
+        case ultraThin  // Subtle separation
+        case thin       // More definition
+        case regular    // Strong separation
+        case thick      // Dark overlays
+        
+        var material: Material {
+            switch self {
+            case .ultraThin: return .ultraThinMaterial
+            case .thin: return .thinMaterial
+            case .regular: return .regularMaterial
+            case .thick: return .thickMaterial
+            }
+        }
+    }
+    
+    /// Content card modifier
+    struct ContentCard: ViewModifier {
+        let materialType: MaterialType
+        let cornerRadius: CGFloat
+        let padding: CGFloat
+        
+        init(materialType: MaterialType = .thin, cornerRadius: CGFloat = 20, padding: CGFloat = AppSpacing.md) {
+            self.materialType = materialType
+            self.cornerRadius = cornerRadius
+            self.padding = padding
+        }
+        
+        func body(content: Content) -> some View {
+            content
+                .padding(padding)
+                .background(materialType.material)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        }
+    }
+    
+    /// List item modifier
+    struct ListItem: ViewModifier {
+        let cornerRadius: CGFloat
+        let padding: CGFloat
+        
+        init(cornerRadius: CGFloat = 12, padding: CGFloat = AppSpacing.sm) {
+            self.cornerRadius = cornerRadius
+            self.padding = padding
+        }
+        
+        func body(content: Content) -> some View {
+            content
+                .padding(.vertical, padding)
+                .background(Material.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        }
+    }
+    
+    /// Section background modifier
+    struct SectionBackground: ViewModifier {
+        let cornerRadius: CGFloat
+        let padding: CGFloat
+        
+        init(cornerRadius: CGFloat = 20, padding: CGFloat = AppSpacing.md) {
+            self.cornerRadius = cornerRadius
+            self.padding = padding
+        }
+        
+        func body(content: Content) -> some View {
+            content
+                .padding(padding)
+                .background(Material.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        }
+    }
+}
+
+extension View {
+    /// Apply content card styling (standard material, not Liquid Glass)
+    func contentCard(materialType: ContentMaterial.MaterialType = .thin, cornerRadius: CGFloat = 20, padding: CGFloat = AppSpacing.md) -> some View {
+        modifier(ContentMaterial.ContentCard(materialType: materialType, cornerRadius: cornerRadius, padding: padding))
+    }
+    
+    /// Apply list item styling (ultraThin material)
+    func contentListItem(cornerRadius: CGFloat = 12, padding: CGFloat = AppSpacing.sm) -> some View {
+        modifier(ContentMaterial.ListItem(cornerRadius: cornerRadius, padding: padding))
+    }
+    
+    /// Apply section background (thin material)
+    func contentSection(cornerRadius: CGFloat = 20, padding: CGFloat = AppSpacing.md) -> some View {
+        modifier(ContentMaterial.SectionBackground(cornerRadius: cornerRadius, padding: padding))
+    }
+}
+
+// MARK: - Phase 10: Performance Optimization
+/// Performance management and optimization utilities
+struct PerformanceManager {
+    /// Maximum particle count for optimal performance
+    static let maxParticleCount: Int = 20
+    
+    /// Maximum particles per track
+    static let maxParticlesPerTrack: Int = 5
+    
+    /// Optimal blur radius for performance
+    static let optimalBlurRadius: CGFloat = 10
+    
+    /// Maximum blur radius before performance impact
+    static let maxBlurRadius: CGFloat = 20
+    
+    /// Check if device is in low power mode
+    static var isLowPowerMode: Bool {
+        #if os(iOS)
+        return ProcessInfo.processInfo.isLowPowerModeEnabled
+        #else
+        return false
+        #endif
+    }
+    
+    /// Should reduce animations for performance
+    static var shouldReduceAnimations: Bool {
+        return AccessibilityManager.shouldReduceMotion || isLowPowerMode
+    }
+    
+    /// Get optimal particle count based on active tracks
+    static func optimalParticleCount(activeTracks: Int) -> Int {
+        let total = activeTracks * maxParticlesPerTrack
+        return min(total, maxParticleCount)
+    }
+    
+    /// Get optimal blur radius based on performance settings
+    static func optimalBlurRadius(baseRadius: CGFloat) -> CGFloat {
+        if shouldReduceAnimations {
+            return min(baseRadius * 0.5, optimalBlurRadius)
+        }
+        return min(baseRadius, maxBlurRadius)
+    }
+}
+
+// MARK: - Phase 9: Accessibility System
+/// Centralized accessibility management
+struct AccessibilityManager {
+    /// Check if motion should be reduced
+    static var shouldReduceMotion: Bool {
+        #if os(iOS)
+        return UIAccessibility.isReduceMotionEnabled || SettingsManager.shared.reduceMotion
+        #else
+        return SettingsManager.shared.reduceMotion
+        #endif
+    }
+    
+    /// Check if increased contrast is enabled
+    static var isIncreasedContrast: Bool {
+        #if os(iOS)
+        return UIAccessibility.isDarkerSystemColorsEnabled || UIAccessibility.isReduceTransparencyEnabled
+        #else
+        return false
+        #endif
+    }
+    
+    /// Check if VoiceOver is running
+    static var isVoiceOverRunning: Bool {
+        #if os(iOS)
+        return UIAccessibility.isVoiceOverRunning
+        #else
+        return false
+        #endif
+    }
+    
+    /// Get accessibility label for sound track
+    static func soundTrackLabel(name: String, isActive: Bool, volume: Int) -> String {
+        let status = isActive ? "active" : "inactive"
+        return "\(name) sound, \(status), volume \(volume) percent"
+    }
+    
+    /// Get accessibility hint for sound track
+    static func soundTrackHint(isActive: Bool) -> String {
+        return isActive 
+            ? "Double tap to stop. Drag to adjust volume."
+            : "Double tap to play. Drag to adjust volume."
+    }
+    
+    /// Get accessibility label for icon button
+    static func iconButtonLabel(icon: String, title: String) -> String {
+        return "\(title), \(icon) icon"
+    }
+    
+    /// Get accessibility hint for icon button
+    static func iconButtonHint(action: String) -> String {
+        return "Double tap to \(action)"
+    }
+}
+
+// MARK: - Phase 5: Motion & Animation System
+/// Centralized motion and animation management
+struct MotionSystem {
+    /// Check if motion should be reduced (accessibility setting)
+    static var shouldReduceMotion: Bool {
+        AccessibilityManager.shouldReduceMotion
+    }
+    
+    /// Interactive feedback animation (for button presses, taps)
+    static var interactiveFeedback: SwiftUI.Animation {
+        shouldReduceMotion 
+            ? .linear(duration: 0)
+            : .spring(response: 0.3, dampingFraction: 0.7)
+    }
+    
+    /// Transition animation (for view transitions)
+    static var transition: SwiftUI.Animation {
+        shouldReduceMotion
+            ? .linear(duration: 0)
+            : .spring(response: 0.4, dampingFraction: 0.8)
+    }
+    
+    /// Smooth transition (for content changes)
+    static var smoothTransition: SwiftUI.Animation {
+        shouldReduceMotion
+            ? .linear(duration: 0)
+            : .easeInOut(duration: 0.3)
+    }
+    
+    /// Quick transition (for micro-interactions)
+    static var quickTransition: SwiftUI.Animation {
+        shouldReduceMotion
+            ? .linear(duration: 0)
+            : .easeOut(duration: 0.2)
+    }
+}
+
+/// Haptic feedback system
+struct HapticFeedback {
+    /// Light impact (for subtle feedback)
+    static func light() {
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        generator.impactOccurred()
+        #endif
+    }
+    
+    /// Medium impact (for standard interactions)
+    static func medium() {
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.prepare()
+        generator.impactOccurred()
+        #endif
+    }
+    
+    /// Heavy impact (for important actions)
+    static func heavy() {
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .heavy)
+        generator.prepare()
+        generator.impactOccurred()
+        #endif
+    }
+    
+    /// Selection feedback (for picker changes)
+    static func selection() {
+        #if os(iOS)
+        let generator = UISelectionFeedbackGenerator()
+        generator.prepare()
+        generator.selectionChanged()
+        #endif
+    }
+    
+    /// Success feedback (for completed actions)
+    static func success() {
+        #if os(iOS)
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(.success)
+        #endif
+    }
+    
+    /// Error feedback (for errors)
+    static func error() {
+        #if os(iOS)
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(.error)
+        #endif
+    }
+    
+    /// Warning feedback (for warnings)
+    static func warning() {
+        #if os(iOS)
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(.warning)
+        #endif
+    }
+}
+
+/// Interactive feedback modifier
+struct InteractiveFeedbackModifier: ViewModifier {
+    @State private var isPressed = false
+    let onPress: (() -> Void)?
+    let hapticStyle: HapticStyle
+    
+    enum HapticStyle {
+        case none
+        case light
+        case medium
+        case heavy
+        case selection
+    }
+    
+    init(hapticStyle: HapticStyle = .medium, onPress: (() -> Void)? = nil) {
+        self.hapticStyle = hapticStyle
+        self.onPress = onPress
+    }
+    
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .animation(MotionSystem.interactiveFeedback, value: isPressed)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isPressed {
+                            isPressed = true
+                            triggerHaptic()
+                            onPress?()
+                        }
+                    }
+                    .onEnded { _ in
+                        isPressed = false
+                    }
+            )
+    }
+    
+    private func triggerHaptic() {
+        switch hapticStyle {
+        case .none:
+            break
+        case .light:
+            HapticFeedback.light()
+        case .medium:
+            HapticFeedback.medium()
+        case .heavy:
+            HapticFeedback.heavy()
+        case .selection:
+            HapticFeedback.selection()
+        }
+    }
+}
+
+extension View {
+    /// Add interactive feedback to any view
+    func interactiveFeedback(hapticStyle: InteractiveFeedbackModifier.HapticStyle = .medium, onPress: (() -> Void)? = nil) -> some View {
+        modifier(InteractiveFeedbackModifier(hapticStyle: hapticStyle, onPress: onPress))
+    }
+}
+
+// MARK: - Phase 3: Circular Icon Component
+/// Circular icon with consistent sizing hierarchy and active/inactive states
+struct CircularIcon: View {
+    let icon: String
+    let color: Color
+    let isActive: Bool
+    let size: IconSize
+    var accessibilityLabel: String?
+    var accessibilityHint: String?
+    
+    enum IconSize {
+        case primary    // 56pt container, 28pt symbol
+        case secondary  // 48pt container, 24pt symbol
+        case tertiary   // 40pt container, 20pt symbol
+        
+        var containerSize: CGFloat {
+            switch self {
+            case .primary: return 56
+            case .secondary: return 48
+            case .tertiary: return 40
+            }
+        }
+        
+        var symbolSize: CGFloat {
+            switch self {
+            case .primary: return 28
+            case .secondary: return 24
+            case .tertiary: return 20
+            }
+        }
+    }
+    
+    init(icon: String, color: Color, isActive: Bool = false, size: IconSize = .primary, accessibilityLabel: String? = nil, accessibilityHint: String? = nil) {
+        self.icon = icon
+        self.color = color
+        self.isActive = isActive
+        self.size = size
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityHint = accessibilityHint
+    }
+    
+    var body: some View {
+        ZStack {
+            // Glow halo (active only)
+            if isActive {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                color.opacity(0.3),
+                                color.opacity(0.1),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: size.containerSize * 0.7
+                        )
+                    )
+                    .blur(radius: 8)
+                    .frame(width: size.containerSize * 1.4, height: size.containerSize * 1.4)
+            }
+            
+            // Main container
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: isActive ? [
+                                    color.opacity(0.9),
+                                    color.opacity(0.6)
+                                ] : [
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: isActive ? 2 : 1.5
+                        )
+                )
+                .frame(width: size.containerSize, height: size.containerSize)
+                .shadow(
+                    color: isActive ? color.opacity(0.6) : Color.black.opacity(0.2),
+                    radius: isActive ? 12 : 4,
+                    y: isActive ? 4 : 2
+                )
+                .scaleEffect(isActive ? 1.05 : 1.0)
+            
+            // Icon symbol - Phase 4: Use vibrant colors
+            // Phase 9: Color independence - icon shape provides information, not just color
+            Image(systemName: icon)
+                .font(.system(size: size.symbolSize, weight: .medium))
+                .foregroundStyle(isActive ? color : AppColors.iconInactive) // Vibrant color for contrast
+        }
+        .animation(AppTheme.Animation.liquidSpring, value: isActive)
+        // Phase 9: Accessibility support
+        .accessibilityLabel(accessibilityLabel ?? "\(icon) icon")
+        .accessibilityHint(accessibilityHint ?? (isActive ? "Active" : "Inactive"))
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+}
+
+// MARK: - Phase 1: Button Components with Liquid Glass
+
+/// Primary action button with colored Liquid Glass background
+struct PrimaryButton: View {
+    let title: String
+    let icon: String?
+    let action: () -> Void
+    let color: Color
+    let isLoading: Bool
+    let isDisabled: Bool
+    
+    init(
+        _ title: String,
+        icon: String? = nil,
+        color: Color = AppTheme.accent,
+        isLoading: Bool = false,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+        self.isLoading = isLoading
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+    
+    var body: some View {
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.prepare()
+            impact.impactOccurred()
+            action()
+        }) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    if let icon = icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background {
+                // Colored Liquid Glass background (Phase 1)
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+                    .overlay {
+                        // Color tint for primary action
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        color.opacity(0.4),
+                                        color.opacity(0.3)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                color.opacity(0.6),
+                                color.opacity(0.4)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            }
+            .shadow(color: color.opacity(0.3), radius: 12, x: 0, y: 4)
+        }
+        .disabled(isLoading || isDisabled)
+        .opacity(isDisabled ? 0.5 : 1.0)
+    }
+}
+
+/// Secondary button with regular Liquid Glass (monochromatic)
+struct SecondaryButton: View {
+    let title: String
+    let icon: String?
+    let action: () -> Void
+    let isLoading: Bool
+    let isDisabled: Bool
+    
+    init(
+        _ title: String,
+        icon: String? = nil,
+        isLoading: Bool = false,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.icon = icon
+        self.isLoading = isLoading
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+    
+    var body: some View {
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.prepare()
+            impact.impactOccurred()
+            action()
+        }) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    if let icon = icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 17, weight: .medium))
+                    }
+                    Text(title)
+                        .font(.system(size: 17, weight: .medium))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background {
+                // Regular Liquid Glass (monochromatic)
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.15)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            }
+        }
+        .disabled(isLoading || isDisabled)
+        .opacity(isDisabled ? 0.5 : 1.0)
     }
 }
