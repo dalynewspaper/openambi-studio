@@ -12,7 +12,9 @@ struct SettingsView: View {
     @State private var showPrivacyPolicy = false
     @State private var showTermsOfService = false
     @State private var showAcknowledgements = false
-    @State private var showUserRecordings = false
+    // The "My Recordings" entry was removed in openambi 2.0; the library
+    // now lives in the Field room (see RecordingsLibrarySection). The
+    // sheet binding below is intentionally retired.
     @State private var showProfileEdit = false
     
     var body: some View {
@@ -105,23 +107,9 @@ struct SettingsView: View {
                         // Account Settings Group (if authenticated)
                         if authManager.isAuthenticated {
                             SettingsGroup {
-                                Button(action: {
-                                    showUserRecordings = true
-                                }) {
-                                    SettingsRow(
-                                        icon: "mic.fill",
-                                        iconColor: .purple,
-                                        title: "My Recordings",
-                                        showDivider: true,
-                                        trailing: {
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                                .font(.system(size: 14, weight: .semibold))
-                                        }
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                
+                                // "My Recordings" intentionally removed in
+                                // openambi 2.0 — the library now lives in
+                                // the Field room (swipe right to open).
                                 Button(action: {
                                     // Open subscription management
                                 }) {
@@ -497,11 +485,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAcknowledgements) {
             AcknowledgementsView()
-        }
-        .sheet(isPresented: $showUserRecordings) {
-            UserRecordingsView()
-                .environmentObject(authManager)
-                .environmentObject(audioManager)
         }
         .sheet(isPresented: $showProfileEdit) {
             ProfileEditView(authManager: authManager)

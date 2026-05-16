@@ -13,7 +13,7 @@
 		953F37B02EE3A705007EA25C /* RecordingMetadataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */; };
 		953F37B12EE3A705007EA25C /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37AF2EE3A705007EA25C /* RecordingView.swift */; };
 		953F37B32EE3A793007EA25C /* RecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37B22EE3A793007EA25C /* RecordingManager.swift */; };
-		953F37C32EEDD240007EA25C /* UserRecordingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37C22EEDD240007EA25C /* UserRecordingsView.swift */; };
+		BD000000000000000000C100 /* RecordingsLibrarySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C101 /* RecordingsLibrarySection.swift */; };
 		953F37C52EEDE10E007EA25C /* EditRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F37C42EEDE10E007EA25C /* EditRecordingView.swift */; };
 		95C633B72ED8644E0051DBA3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 95C633B62ED8644E0051DBA3 /* WidgetKit.framework */; };
 		95C633B92ED8644E0051DBA3 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 95C633B82ED8644E0051DBA3 /* SwiftUI.framework */; };
@@ -85,7 +85,7 @@
 		953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingMetadataView.swift; sourceTree = "<group>"; };
 		953F37AF2EE3A705007EA25C /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
 		953F37B22EE3A793007EA25C /* RecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManager.swift; sourceTree = "<group>"; };
-		953F37C22EEDD240007EA25C /* UserRecordingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRecordingsView.swift; sourceTree = "<group>"; };
+		BD000000000000000000C101 /* RecordingsLibrarySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingsLibrarySection.swift; sourceTree = "<group>"; };
 		953F37C42EEDE10E007EA25C /* EditRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditRecordingView.swift; sourceTree = "<group>"; };
 		958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "openambi-studio.entitlements"; sourceTree = "<group>"; };
 		95C633B42ED8644E0051DBA3 /* OpenAmbiWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenAmbiWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -177,7 +177,7 @@
 			isa = PBXGroup;
 			children = (
 				953F37C42EEDE10E007EA25C /* EditRecordingView.swift */,
-				953F37C22EEDD240007EA25C /* UserRecordingsView.swift */,
+				BD000000000000000000C101 /* RecordingsLibrarySection.swift */,
 				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
 				953F37AF2EE3A705007EA25C /* RecordingView.swift */,
 				958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */,
@@ -393,7 +393,7 @@
 				F9A8B7C6D5E4F3A2B1C0D9E8 /* Soundscape3DView.swift in Sources */,
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* AudioTrack.swift in Sources */,
 				C3D4E5F6A7B8C9D0E1F2A3B4 /* AudioManager.swift in Sources */,
-				953F37C32EEDD240007EA25C /* UserRecordingsView.swift in Sources */,
+				BD000000000000000000C100 /* RecordingsLibrarySection.swift in Sources */,
 				D4E5F6A7B8C9D0E1F2A3B4C5 /* SupabaseService.swift in Sources */,
 				953F37B02EE3A705007EA25C /* RecordingMetadataView.swift in Sources */,
 				953F37B12EE3A705007EA25C /* RecordingView.swift in Sources */,
