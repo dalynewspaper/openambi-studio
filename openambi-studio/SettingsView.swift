@@ -47,30 +47,17 @@ struct SettingsView: View {
                         AtelierHeader(isAuthenticated: authManager.isAuthenticated)
                             .padding(.bottom, AppSpacing.lg)
                         
-                        // Account Section
-                        if authManager.isAuthenticated, let user = authManager.currentUser {
-                            SettingsProfileCard(
-                                name: user.friendlyName,
-                                subtitle: user.email ?? "Apple Account",
-                                photoURL: user.photoURL,
-                                onTap: {
-                                    showProfileEdit = true
-                                }
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 32)
-                        } else {
-                            SettingsProfileCard(
-                                name: "Sign In",
-                                subtitle: "Sign in to sync your mixes and preferences",
-                                photoURL: nil,
-                                onTap: {
-                                    showSignIn = true
-                                }
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 32)
-                        }
+                        // Identity hero band (Phase 4.2). Replaces the
+                        // v1 SettingsProfileCard. The signed-out variant
+                        // is a calm invitation, not a throwaway 'Sign
+                        // In' row — the whole card is the affordance.
+                        AtelierIdentity(
+                            user: authManager.isAuthenticated ? authManager.currentUser : nil,
+                            onTapSignedIn: { showProfileEdit = true },
+                            onTapSignedOut: { showSignIn = true }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 28)
                         
                         // Account Settings Group (if authenticated)
                         if authManager.isAuthenticated {

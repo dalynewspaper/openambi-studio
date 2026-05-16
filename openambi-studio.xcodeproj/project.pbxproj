@@ -60,6 +60,7 @@
 		BD000000000000000000C800 /* PlaceChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C801 /* PlaceChip.swift */; };
 		BD000000000000000000D100 /* StudioHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000D101 /* StudioHeader.swift */; };
 		BD000000000000000000D300 /* AtelierHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000D301 /* AtelierHeader.swift */; };
+		BD000000000000000000D400 /* AtelierIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000D401 /* AtelierIdentity.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -143,6 +144,7 @@
 		BD000000000000000000C801 /* PlaceChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceChip.swift; sourceTree = "<group>"; };
 		BD000000000000000000D101 /* StudioHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioHeader.swift; sourceTree = "<group>"; };
 		BD000000000000000000D301 /* AtelierHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtelierHeader.swift; sourceTree = "<group>"; };
+		BD000000000000000000D401 /* AtelierIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtelierIdentity.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -202,6 +204,7 @@
 				BD000000000000000000C801 /* PlaceChip.swift */,
 				BD000000000000000000D101 /* StudioHeader.swift */,
 				BD000000000000000000D301 /* AtelierHeader.swift */,
+				BD000000000000000000D401 /* AtelierIdentity.swift */,
 				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
 				953F37AF2EE3A705007EA25C /* RecordingView.swift */,
 				958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */,
@@ -458,6 +461,7 @@
 				BD000000000000000000C800 /* PlaceChip.swift in Sources */,
 				BD000000000000000000D100 /* StudioHeader.swift in Sources */,
 				BD000000000000000000D300 /* AtelierHeader.swift in Sources */,
+				BD000000000000000000D400 /* AtelierIdentity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
