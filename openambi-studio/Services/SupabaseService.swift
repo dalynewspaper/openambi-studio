@@ -26,14 +26,34 @@ class SupabaseService: ObservableObject {
         return request
     }
 
-    /// Storage sometimes answers 403 with `row-level security` when `user-recording-videos` policies are missing.
-    private static func videoUpload403Error(body: String) -> SupabaseError {
-        if body.localizedCaseInsensitiveContains("row-level security") {
-            return .networkError(
-                "Could not upload the background video — storage blocked it. Apply BUCKET_VIDEO.sql in Supabase (video bucket policies), or turn off “keep the picture too” to save audio only."
-            )
-        }
-        return .forbidden
+    /// Storage often returns **HTTP 400** while the JSON body still says RLS failed (`statusCode: "403"`).
+    /// Treat those like a permission failure so we don’t dump raw JSON into the alert.
+    private static func isRecordingVideoStorageRLSRejection(httpStatus: Int, body: String) -> Bool {
+        let b = body.lowercased()
+        if b.contains("row-level security") || b.contains("row level security") { return true }
+        if httpStatus == 403 { return true }
+        return false
+    }
+
+    private static func recordingVideoStorageDeniedError() -> SupabaseError {
+        .networkError(
+            "Could not upload the background video — storage blocked it (permissions). In Supabase SQL Editor, run the latest BUCKET_VIDEO.sql from this repo, then retry. Or turn off “keep the picture too” to save audio only."
+        )
+    }
+
+    /// `sub` claim from a Supabase user JWT (middle segment). Used to catch path/JWT mismatches before upload.
+    private static func uuidFromJWTSubject(_ bearerToken: String) -> UUID? {
+        let segments = bearerToken.split(separator: ".")
+        guard segments.count >= 2 else { return nil }
+        var payload = String(segments[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let pad = (4 - payload.count % 4) % 4
+        if pad > 0 { payload.append(String(repeating: "=", count: pad)) }
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sub = json["sub"] as? String else { return nil }
+        return UUID(uuidString: sub)
     }
     
     // MARK: - Fetch Audio Tracks
@@ -577,6 +597,14 @@ class SupabaseService: ObservableObject {
         let fileName = "\(recordingId.uuidString).\(ext)"
         let filePath = "\(userId.uuidString)/\(fileName)"
 
+        if let jwtUserId = Self.uuidFromJWTSubject(accessToken),
+           jwtUserId != userId {
+            print("⚠️ JWT user \(jwtUserId) does not match upload path user \(userId)")
+            throw SupabaseError.networkError(
+                "Your sign-in session doesn’t match the upload account — sign out and sign in again, then retry."
+            )
+        }
+
         let encodedUserId = userId.uuidString.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId.uuidString
         let encodedFileName = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? fileName
         let storageURL = URL(string: "\(SupabaseConfig.storageURL)/object/user-recording-videos/\(encodedUserId)/\(encodedFileName)")!
@@ -618,8 +646,10 @@ class SupabaseService: ObservableObject {
                 throw SupabaseError.bucketNotFound
             } else if httpResponse.statusCode == 401 {
                 throw SupabaseError.unauthorized
+            } else if Self.isRecordingVideoStorageRLSRejection(httpStatus: httpResponse.statusCode, body: errorMessage) {
+                throw Self.recordingVideoStorageDeniedError()
             } else if httpResponse.statusCode == 403 {
-                throw Self.videoUpload403Error(body: errorMessage)
+                throw SupabaseError.forbidden
             } else {
                 throw SupabaseError.networkError("video upload failed: \(errorMessage)")
             }
