@@ -58,6 +58,7 @@
 		BD000000000000000000C600 /* CircularWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C601 /* CircularWaveformView.swift */; };
 		BD000000000000000000C700 /* PlaceObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C701 /* PlaceObserver.swift */; };
 		BD000000000000000000C800 /* PlaceChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C801 /* PlaceChip.swift */; };
+		BD000000000000000000D100 /* StudioHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000D101 /* StudioHeader.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -139,6 +140,7 @@
 		BD000000000000000000C601 /* CircularWaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularWaveformView.swift; sourceTree = "<group>"; };
 		BD000000000000000000C701 /* PlaceObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceObserver.swift; sourceTree = "<group>"; };
 		BD000000000000000000C801 /* PlaceChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceChip.swift; sourceTree = "<group>"; };
+		BD000000000000000000D101 /* StudioHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioHeader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -196,6 +198,7 @@
 				BD000000000000000000C501 /* LibraryCardSkeleton.swift */,
 				BD000000000000000000C601 /* CircularWaveformView.swift */,
 				BD000000000000000000C801 /* PlaceChip.swift */,
+				BD000000000000000000D101 /* StudioHeader.swift */,
 				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
 				953F37AF2EE3A705007EA25C /* RecordingView.swift */,
 				958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */,
@@ -450,6 +453,7 @@
 				BD000000000000000000C600 /* CircularWaveformView.swift in Sources */,
 				BD000000000000000000C700 /* PlaceObserver.swift in Sources */,
 				BD000000000000000000C800 /* PlaceChip.swift in Sources */,
+				BD000000000000000000D100 /* StudioHeader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

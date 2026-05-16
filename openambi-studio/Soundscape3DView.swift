@@ -104,12 +104,33 @@ struct Soundscape3DView: View {
                         print("📍 Calculated dock frame (size change): \(calculatedFrame)")
                     }
                 
-                // Master Volume Slider - positioned at top between safe area and sound icons
+                // Studio header (Phase 3.1) — editorial scene mood + place chip.
+                // Sits at the very top of every Studio appearance, regardless
+                // of whether tracks are active or not, so the IA reads from
+                // the moment the user lands.
+                if selectedTrackForModal == nil {
+                    VStack(spacing: 0) {
+                        Spacer()
+                            .frame(height: effectiveTopSafeArea + AppSpacing.sm)
+
+                        StudioHeader(activeTracks: activeTracks)
+                            .opacity(uiMaterialized ? 1.0 : 0.0)
+                            .offset(y: uiMaterialized ? 0 : -8)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: uiMaterialized)
+
+                        Spacer()
+                    }
+                    .zIndex(103) // Above master volume slider
+                }
+
+                // Master Volume Slider - positioned below the studio header,
+                // between the safe area and the sound icons. Only visible
+                // when there is something to control.
                 if !activeTracks.isEmpty && selectedTrackForModal == nil {
                     VStack {
                         Spacer()
-                            .frame(height: effectiveTopSafeArea + AppSpacing.md + AppSpacing.md) // Position in middle of safe area and icons (48px down)
-                        
+                            .frame(height: effectiveTopSafeArea + AppSpacing.xl + AppSpacing.md + AppSpacing.md)
+
                         MasterVolumeSlider(audioManager: audioManager)
                             .padding(.horizontal, AppSpacing.edgePadding)
                             .zIndex(102) // Above everything
@@ -117,7 +138,7 @@ struct Soundscape3DView: View {
                             .opacity(uiMaterialized ? 1.0 : 0.0)
                             .offset(y: uiMaterialized ? 0 : 10)
                             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: uiMaterialized)
-                        
+
                         Spacer()
                     }
                     .zIndex(102) // Above grid
