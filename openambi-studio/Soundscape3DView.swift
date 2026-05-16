@@ -987,37 +987,74 @@ struct ImmersiveBackground: View {
 }
 
 // MARK: - Dynamic Color Orb (for active sounds)
+//
+// Constellation drift (Phase 3.5).
+//
+// Each per-track DynamicColorOrb anchors to a stable point on the
+// scene (the parent supplies it from the track's UUID) and now drifts
+// gently around that anchor — ±14pt over an asymmetric 28s/34s sin/cos
+// pair, so the orbs look like a constellation breathing rather than a
+// metronome. The drift is driven by a TimelineView running at .animation
+// granularity so it costs zero ObservedObject churn and never wakes
+// the run loop more than the display does.
+//
+// Drift is gated by AmbientFeatureFlags.allowFloatingColorOrbs (already
+// gating whether we render at all) plus the environment Reduce Motion
+// flag. With Reduce Motion on, each orb sits perfectly still on its
+// anchor — same composition, just no sway.
 struct DynamicColorOrb: View {
     let color: Color
     let volume: Double
     let position: CGPoint
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulseScale: CGFloat = 1.0
-    @State private var pulsePhase: Double = 0
-    
+
+    /// Stable per-orb seed so two orbs at slightly different anchors
+    /// drift on completely unrelated phases. Hashing the position
+    /// avoids needing a new parameter on every caller.
+    private var seed: Double {
+        let s = sin(Double(position.x) * 12.9898 + Double(position.y) * 78.233) * 43758.5453
+        return s - floor(s)               // [0, 1)
+    }
+
     var body: some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [
-                        color.opacity(0.15 * volume),
-                        color.opacity(0.08 * volume),
-                        color.opacity(0.0)
-                    ],
-                    center: .center,
-                    startRadius: 50,
-                    endRadius: 400 * CGFloat(volume)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            // Two orthogonal sin curves with prime-ish periods so the
+            // path never repeats visibly. Amplitude scaled by volume:
+            // a faint orb drifts subtly, a loud one sways more.
+            let amplitude: Double = 14.0 * (0.6 + volume * 0.4)
+            let driftX = amplitude * sin((t / 28.0 + seed) * 2 * .pi)
+            let driftY = amplitude * cos((t / 34.0 + seed * 1.7) * 2 * .pi)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            color.opacity(0.15 * volume),
+                            color.opacity(0.08 * volume),
+                            color.opacity(0.0)
+                        ],
+                        center: .center,
+                        startRadius: 50,
+                        endRadius: 400 * CGFloat(volume)
+                    )
                 )
-            )
-            .frame(width: 800 * CGFloat(volume), height: 800 * CGFloat(volume))
-            .position(position)
-            .blur(radius: 100 * CGFloat(volume))
-            .scaleEffect(pulseScale)
-            .onAppear {
-                // 5x slower, very relaxed pulsing animation (20 seconds per cycle)
-                withAnimation(.easeInOut(duration: 20.0).repeatForever(autoreverses: true)) {
-                    pulseScale = 1.03
-                }
+                .frame(width: 800 * CGFloat(volume), height: 800 * CGFloat(volume))
+                .position(x: position.x + CGFloat(driftX), y: position.y + CGFloat(driftY))
+                .blur(radius: 100 * CGFloat(volume))
+                .scaleEffect(pulseScale)
+        }
+        .onAppear {
+            // Long, calm volume pulse. Reduce Motion users get a
+            // static scale of 1.0 which is the initial value, so
+            // skipping the animation here matches that intent.
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 20.0).repeatForever(autoreverses: true)) {
+                pulseScale = 1.03
             }
+        }
     }
 }
 
