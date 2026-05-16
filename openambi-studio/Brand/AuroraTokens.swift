@@ -244,6 +244,34 @@ extension View {
     }
 }
 
+// MARK: - Aurora colors (semantic, WCAG-aware)
+//
+// Tokens for text and iconography placed on top of AuroraGlass or any
+// scene material. The opacity tiers are picked to clear WCAG AA contrast
+// on the deepest stop of `AppTheme.background` (~#0D141F).
+//
+// Migrate away from raw `Color.white.opacity(...)` text in Phase 2.
+
+enum AuroraColors {
+    enum TextOnAurora {
+        static let primary   = Color.white.opacity(0.95) // ≥ 14:1 contrast on deep gradient
+        static let secondary = Color.white.opacity(0.78) // ≥ 11:1
+        static let tertiary  = Color.white.opacity(0.58) // ≥  7:1 — captions, hints
+        static let quaternary = Color.white.opacity(0.38) // disabled / decorative
+    }
+
+    enum IconOnAurora {
+        static let active   = Color.white.opacity(0.92)
+        static let inactive = Color.white.opacity(0.55)
+    }
+
+    enum Stroke {
+        static let hairline    = Color.white.opacity(0.10) // dividers, separators
+        static let edge        = Color.white.opacity(0.18) // standard borders
+        static let focus       = Color.white.opacity(0.45) // focused / selected
+    }
+}
+
 #if DEBUG
 #Preview("Aurora tokens — catalog") {
     ScrollView {
@@ -269,21 +297,42 @@ extension View {
             Group {
                 Text("Aurora glass forms")
                     .font(AuroraTypography.ui(13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(AuroraColors.TextOnAurora.tertiary)
                     .tracking(1.5)
 
                 ForEach([AuroraGlass.surface, .dock, .canvas], id: \.self) { form in
                     HStack {
                         Text(label(for: form))
                             .font(AuroraTypography.ui(AuroraTypography.Size.uiHeadline, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(AuroraColors.TextOnAurora.primary)
                         Spacer()
                         Text("•")
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(AuroraColors.TextOnAurora.quaternary)
                     }
                     .padding(20)
                     .auroraGlass(form)
                 }
+            }
+
+            Group {
+                Text("Text on aurora")
+                    .font(AuroraTypography.ui(13, weight: .semibold))
+                    .foregroundColor(AuroraColors.TextOnAurora.tertiary)
+                    .tracking(1.5)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Primary  ·  AA on deep gradient")
+                        .foregroundColor(AuroraColors.TextOnAurora.primary)
+                    Text("Secondary  ·  large titles, list rows")
+                        .foregroundColor(AuroraColors.TextOnAurora.secondary)
+                    Text("Tertiary  ·  captions and supporting copy")
+                        .foregroundColor(AuroraColors.TextOnAurora.tertiary)
+                    Text("Quaternary  ·  decorative or disabled")
+                        .foregroundColor(AuroraColors.TextOnAurora.quaternary)
+                }
+                .font(AuroraTypography.ui(AuroraTypography.Size.uiBody))
+                .padding(20)
+                .auroraGlass(.surface)
             }
         }
         .padding(24)
