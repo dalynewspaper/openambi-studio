@@ -29,6 +29,9 @@ struct RecordingView: View {
     // we're doing ("listening to your scene…") without losing context.
     @State private var showSourcePicker = false
     @State private var isIngesting = false
+    @State private var pendingLoopPick: PendingVideoImport?
+    @State private var isFinalizingLoop = false
+    @State private var loopFinalizeError: String?
     @State private var ingestedClip: IngestedVideo?
     @State private var ingestError: String?
 
@@ -110,14 +113,28 @@ struct RecordingView: View {
                     ZStack {
                         Color.black.opacity(0.55).ignoresSafeArea()
                         AuroraLoader.Modal(
-                            title: "listening to your scene…",
-                            subtitle: "lifting the audio out"
+                            title: "opening your scene…",
+                            subtitle: "getting your clip ready"
                         )
                     }
                     .transition(.opacity)
                 }
             }
             .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $pendingLoopPick) { pending in
+            VideoLoopSegmentPicker(
+                pending: pending,
+                isWorking: isFinalizingLoop,
+                onConfirm: { loopStart in
+                    finalizeImportedLoop(pending: pending, loopStart: loopStart)
+                },
+                onCancel: {
+                    VideoIngest.shared.cleanupPending(pending)
+                    pendingLoopPick = nil
+                }
+            )
+            .presentationDetents([.large])
         }
         .sheet(item: $ingestedClip) { clip in
             RecordingMetadataView(
@@ -141,6 +158,16 @@ struct RecordingView: View {
         } message: {
             Text(errorMessage)
         }
+        .alert("Couldn't build loop", isPresented: Binding(
+            get: { loopFinalizeError != nil },
+            set: { if !$0 { loopFinalizeError = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                loopFinalizeError = nil
+            }
+        } message: {
+            Text(loopFinalizeError ?? "")
+        }
         .onChange(of: recordingManager.recordingState) { _, newState in
             if case .error(let message) = newState {
                 errorMessage = message
@@ -149,20 +176,18 @@ struct RecordingView: View {
         }
     }
 
-    /// Run ingest on the picked URL, then transition from the source sheet
-    /// into the Field Note save view. Errors stay inside the source sheet
-    /// as an editorial inline message — we never use a system alert here.
+    /// Copy + inspect the picked clip, then open the loop segment sheet (or
+    /// errors inline in the source picker).
     private func handleSourcePicked(url: URL) {
         isIngesting = true
         ingestError = nil
         Task {
             do {
-                let ingested = try await VideoIngest.shared.ingest(from: url)
+                let pending = try await VideoIngest.shared.prepareImport(from: url)
                 await MainActor.run {
                     isIngesting = false
                     showSourcePicker = false
-                    ingestedClip = ingested
-                    InstrumentFeedback.success()
+                    pendingLoopPick = pending
                 }
             } catch let error as VideoIngestError {
                 await MainActor.run {
@@ -174,6 +199,33 @@ struct RecordingView: View {
                 await MainActor.run {
                     isIngesting = false
                     ingestError = "couldn't open this video — try another"
+                    InstrumentFeedback.warning()
+                }
+            }
+        }
+    }
+
+    private func finalizeImportedLoop(pending: PendingVideoImport, loopStart: TimeInterval) {
+        isFinalizingLoop = true
+        Task {
+            do {
+                let ingested = try await VideoIngest.shared.finalizeImport(pending: pending, loopStart: loopStart)
+                await MainActor.run {
+                    isFinalizingLoop = false
+                    pendingLoopPick = nil
+                    ingestedClip = ingested
+                    InstrumentFeedback.success()
+                }
+            } catch let error as VideoIngestError {
+                await MainActor.run {
+                    isFinalizingLoop = false
+                    loopFinalizeError = error.errorDescription
+                    InstrumentFeedback.warning()
+                }
+            } catch {
+                await MainActor.run {
+                    isFinalizingLoop = false
+                    loopFinalizeError = "couldn't trim this clip — try another"
                     InstrumentFeedback.warning()
                 }
             }

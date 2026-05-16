@@ -145,7 +145,11 @@ struct RecordingMetadataView: View {
         .environment(\.dominantSoundColor, selectedSigil.color)
         .animation(Motion.breath, value: selectedSigil)
         .onAppear {
-            generateAutoTitle()
+            if case .imported(let ingest) = source {
+                title = Self.titleLineForImportedClip(ingest, timeFormatter: shortTimeFormatter)
+            } else {
+                generateAutoTitle()
+            }
             requestLocationIfNeeded()
             descriptionPlaceholder = Self.descriptionPlaceholders.randomElement() ?? ""
         }
@@ -566,10 +570,27 @@ struct RecordingMetadataView: View {
     /// as the placeholder, so the user can either accept it by saving
     /// (we'll substitute it in `handleSave`) or override it.
     private var autoTitleSuggestion: String {
+        if case .imported(let ingest) = source {
+            return Self.titleLineForImportedClip(ingest, timeFormatter: shortTimeFormatter)
+        }
         if let place = locationManager.locationName, !place.isEmpty {
             return "\(place), \(shortTimeFormatter.string(from: Date()))"
         }
         return "Just now, \(shortTimeFormatter.string(from: Date()))"
+    }
+
+    /// Postcard-style default name: street from embedded GPS (reverse-geocoded)
+    /// plus the clip's capture time — not the device's current place/time.
+    private static func titleLineForImportedClip(_ ingest: IngestedVideo, timeFormatter: DateFormatter) -> String {
+        let timeSource = ingest.captureDate ?? Date()
+        let timeStr = timeFormatter.string(from: timeSource)
+        if let line = ingest.geocodedPlaceTitle, !line.isEmpty {
+            return "\(line), \(timeStr)"
+        }
+        if let c = ingest.gpsCoordinate {
+            return "\(String(format: "%.4f", c.latitude)), \(String(format: "%.4f", c.longitude)), \(timeStr)"
+        }
+        return "Filmed \(timeStr)"
     }
 
     // MARK: - Bare description field
@@ -611,7 +632,7 @@ struct RecordingMetadataView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Button(action: {
-                    if locationManager.currentLocation != nil {
+                    if stripCoordinate != nil {
                         withAnimation(Motion.touch) { revealCoordinates.toggle() }
                         InstrumentFeedback.tap()
                     } else if locationManager.authorizationStatus == .denied {
@@ -621,10 +642,10 @@ struct RecordingMetadataView: View {
                     }
                 }) {
                     HStack(spacing: 10) {
-                        Image(systemName: locationManager.currentLocation != nil ? "location.fill" : "location.slash")
+                        Image(systemName: hasResolvedStripLocation ? "location.fill" : "location.slash")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(
-                                locationManager.currentLocation != nil
+                                hasResolvedStripLocation
                                     ? AuroraColors.IconOnAurora.active
                                     : AuroraColors.IconOnAurora.inactive
                             )
@@ -637,7 +658,7 @@ struct RecordingMetadataView: View {
 
                         Spacer(minLength: 6)
 
-                        if locationManager.currentLocation != nil {
+                        if stripCoordinate != nil {
                             Image(systemName: revealCoordinates ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(AuroraColors.IconOnAurora.inactive)
@@ -658,7 +679,7 @@ struct RecordingMetadataView: View {
                 }
                 .buttonStyle(.plain)
 
-                if revealCoordinates, let coord = locationManager.currentLocation?.coordinate {
+                if revealCoordinates, let coord = stripCoordinate {
                     Text("\(String(format: "%.4f", coord.latitude)) · \(String(format: "%.4f", coord.longitude))")
                         .font(AuroraTypography.mono(11, weight: .regular))
                         .foregroundColor(AuroraColors.TextOnAurora.quaternary)
@@ -669,10 +690,41 @@ struct RecordingMetadataView: View {
         }
     }
 
+    /// When importing, prefer GPS + capture time from the clip; when recording,
+    /// keep the live device snapshot.
+    private var stripTimeDate: Date {
+        if case .imported(let ingest) = source, let d = ingest.captureDate {
+            return d
+        }
+        return Date()
+    }
+
+    private var stripPlaceLabel: String? {
+        if case .imported(let ingest) = source {
+            if let line = ingest.geocodedPlaceTitle, !line.isEmpty { return line }
+            return nil
+        }
+        return locationManager.locationName
+    }
+
+    private var stripCoordinate: CLLocationCoordinate2D? {
+        if case .imported(let ingest) = source, let c = ingest.gpsCoordinate {
+            return c
+        }
+        return locationManager.currentLocation?.coordinate
+    }
+
+    private var hasResolvedStripLocation: Bool {
+        stripCoordinate != nil || !(stripPlaceLabel ?? "").isEmpty
+    }
+
     private var placeStripCaption: String {
-        let time = shortTimeFormatter.string(from: Date())
-        if let place = locationManager.locationName, !place.isEmpty {
+        let time = shortTimeFormatter.string(from: stripTimeDate)
+        if let place = stripPlaceLabel, !place.isEmpty {
             return "\(place)  ·  \(time)"
+        }
+        if let coord = stripCoordinate {
+            return "\(String(format: "%.4f", coord.latitude)) · \(String(format: "%.4f", coord.longitude))  ·  \(time)"
         }
         if locationManager.authorizationStatus == .denied {
             return "Add location  ·  \(time)"
@@ -936,9 +988,9 @@ struct RecordingMetadataView: View {
                     icon: selectedSigil.icon,
                     duration: ingest.duration,
                     fileSize: ingest.audioBytes,
-                    locationName: locationManager.locationName,
-                    latitude: locationManager.currentLocation?.coordinate.latitude,
-                    longitude: locationManager.currentLocation?.coordinate.longitude,
+                    locationName: ingest.geocodedPlaceTitle ?? locationManager.locationName,
+                    latitude: ingest.gpsCoordinate?.latitude ?? locationManager.currentLocation?.coordinate.latitude,
+                    longitude: ingest.gpsCoordinate?.longitude ?? locationManager.currentLocation?.coordinate.longitude,
                     videoFileURL: keepVideo ? ingest.videoURL : nil,
                     videoExtension: keepVideo ? ingest.videoExtension : nil,
                     recordingId: ingest.id

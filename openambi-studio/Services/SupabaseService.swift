@@ -6,6 +6,8 @@ class SupabaseService: ObservableObject {
     
     // Use optimized URLSession with connection pooling
     private let urlSession = PerformanceOptimizer.shared.urlSession
+    /// Storage PUT/POST bodies can be tens of MB — isolated session avoids 30s resource timeout.
+    private let storageUploadSession = PerformanceOptimizer.shared.storageUploadSession
     
     // MARK: - Helper: Create Authenticated Request
     private func createRequest(url: URL, method: String = "GET", accessToken: String? = nil) -> URLRequest {
@@ -332,15 +334,22 @@ class SupabaseService: ObservableObject {
         uploadRequest.setValue("audio/m4a", forHTTPHeaderField: "Content-Type")
         uploadRequest.setValue("binary", forHTTPHeaderField: "x-upsert") // Upsert if exists
         
-        // Read file data
-        let fileData = try Data(contentsOf: fileURL)
-        uploadRequest.httpBody = fileData
-        
-        // Upload file
+        // Stream from disk — avoids pinning multi‑MB payloads in RAM and respects long-running uploads.
         print("📤 Starting file upload to: \(storageURL)")
-        print("📤 File size: \(fileData.count) bytes")
+        print("📤 File path on disk: \(fileURL.path)")
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+           let nbytes = attrs[.size] as? NSNumber {
+            print("📤 File size: \(nbytes.int64Value) bytes")
+        }
         
-        let (uploadData, uploadResponse) = try await urlSession.data(for: uploadRequest)
+        let (uploadData, uploadResponse): (Data, URLResponse)
+        do {
+            (uploadData, uploadResponse) = try await storageUploadSession.upload(for: uploadRequest, fromFile: fileURL)
+        } catch let urlError as URLError where urlError.code == .timedOut {
+            throw SupabaseError.networkError(
+                "Upload timed out — your connection may be slow or the file is large. Try Wi‑Fi or turn off “keep the picture too” to upload audio only."
+            )
+        }
         
         guard let httpResponse = uploadResponse as? HTTPURLResponse else {
             print("❌ Invalid response type from file upload")
@@ -569,13 +578,21 @@ class SupabaseService: ObservableObject {
         uploadRequest.setValue(mime, forHTTPHeaderField: "Content-Type")
         uploadRequest.setValue("binary", forHTTPHeaderField: "x-upsert")
 
-        let fileData = try Data(contentsOf: videoFileURL, options: .mappedIfSafe)
-        uploadRequest.httpBody = fileData
-
         print("🎬 Starting video upload to: \(storageURL)")
-        print("🎬 Video file size: \(fileData.count) bytes (\(mime))")
+        print("🎬 Video path on disk: \(videoFileURL.path)")
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: videoFileURL.path),
+           let nbytes = attrs[.size] as? NSNumber {
+            print("🎬 Video file size: \(nbytes.int64Value) bytes (\(mime))")
+        }
 
-        let (data, response) = try await urlSession.data(for: uploadRequest)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await storageUploadSession.upload(for: uploadRequest, fromFile: videoFileURL)
+        } catch let urlError as URLError where urlError.code == .timedOut {
+            throw SupabaseError.networkError(
+                "Video upload timed out — try Wi‑Fi, a shorter clip, or save without “keep the picture too.”"
+            )
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SupabaseError.invalidResponse

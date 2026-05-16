@@ -7,6 +7,11 @@ class PerformanceOptimizer {
     
     // Shared URLSession with connection pooling and caching
     private let optimizedURLSession: URLSession
+
+    /// Storage uploads (multi‑MB audio/video) must not share the default
+    /// session’s short timeouts — `timeoutIntervalForResource = 30` was
+    /// killing ~50MB+ video posts with `NSURLErrorTimedOut` on typical networks.
+    private let storageUploadURLSession: URLSession
     
     // Memory-efficient buffer sizes based on track state
     struct BufferConfig {
@@ -43,6 +48,15 @@ class PerformanceOptimizer {
         configuration.httpShouldUsePipelining = true
         
         self.optimizedURLSession = URLSession(configuration: configuration)
+
+        let uploadConfiguration = URLSessionConfiguration.default
+        uploadConfiguration.urlCache = nil
+        uploadConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        uploadConfiguration.httpMaximumConnectionsPerHost = 4
+        uploadConfiguration.timeoutIntervalForRequest = 180
+        uploadConfiguration.timeoutIntervalForResource = 1800
+        uploadConfiguration.waitsForConnectivity = true
+        self.storageUploadURLSession = URLSession(configuration: uploadConfiguration)
     }
     
     // MARK: - Public API
@@ -50,6 +64,11 @@ class PerformanceOptimizer {
     /// Get optimized URLSession with connection pooling
     var urlSession: URLSession {
         return optimizedURLSession
+    }
+
+    /// Long-timeout session for Supabase Storage `POST` uploads (recordings + video).
+    var storageUploadSession: URLSession {
+        storageUploadURLSession
     }
     
     /// Get buffer configuration based on track state

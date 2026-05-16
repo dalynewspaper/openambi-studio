@@ -1393,7 +1393,152 @@ struct GridSoundItem: View {
             }
         }
     }
-    
+
+    /// Dock-drag arms only after this hold so scrolling the grid doesn't grab tiles.
+    private let dockDragLongPressDuration: Double = 0.5
+    /// Finger jitter budget while waiting — scrolling exceeds this and cancels the long press.
+    private let dockDragLongPressMaxDistance: CGFloat = 14
+    /// After the half-second hold, a tile only "commits" to dock-drag once the finger moves this far.
+    private let dockDragMovementCommitPoints: CGFloat = 10
+
+    private var dragInactiveTrackToDockGesture: some Gesture {
+        LongPressGesture(minimumDuration: dockDragLongPressDuration, maximumDistance: dockDragLongPressMaxDistance)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { value in
+                guard !isVolumeMode, !isActive else { return }
+                switch value {
+                case .second(true, let dragState):
+                    guard let drag = dragState else { return }
+                    let t = drag.translation
+                    if !isDraggingToDockLocal {
+                        guard hypot(t.width, t.height) >= dockDragMovementCommitPoints else { return }
+                        isDraggingToDockLocal = true
+                        isPressed = true
+                        dragStartPosition = itemPosition
+                        currentGlobalCenter = itemPosition
+                        isDraggingToDock.insert(track.id)
+                        InstrumentFeedback.dragStart()
+                    }
+                    dragOffset = t
+                default:
+                    break
+                }
+            }
+            .onEnded { value in
+                guard !isVolumeMode, !isActive else { return }
+                switch value {
+                case .second(true, let dragState):
+                    guard let drag = dragState else {
+                        cancelInactiveDockDragAnimation()
+                        return
+                    }
+                    finishInactiveDockDrag(drag: drag)
+                default:
+                    cancelInactiveDockDragAnimation()
+                }
+            }
+    }
+
+    private func cancelInactiveDockDragAnimation() {
+        isPressed = false
+        let wasDragging = isDraggingToDockLocal
+        isDraggingToDockLocal = false
+        isDraggingToDock.remove(track.id)
+        if wasDragging {
+            InstrumentFeedback.dragEnd()
+        }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            dragOffset = .zero
+        }
+    }
+
+    private func finishInactiveDockDrag(drag: DragGesture.Value) {
+        isPressed = false
+        let wasDraggingToDock = isDraggingToDockLocal
+        isDraggingToDockLocal = false
+        isDraggingToDock.remove(track.id)
+
+        let dropPosition = CGPoint(
+            x: dragStartPosition.x + drag.translation.width,
+            y: dragStartPosition.y + drag.translation.height
+        )
+
+        let expandedDockFrame = dockFrame.isEmpty ? .zero : CGRect(
+            x: dockFrame.minX - 20,
+            y: dockFrame.minY - 20,
+            width: dockFrame.width + 40,
+            height: dockFrame.height + 40
+        )
+
+        if wasDraggingToDock {
+            print("🎯 Drop detection - Track: \(track.name)")
+            print("   Drag start position: \(dragStartPosition)")
+            print("   Translation: \(drag.translation)")
+            print("   Calculated drop position: \(dropPosition)")
+            print("   Dock frame: \(dockFrame)")
+            print("   Expanded frame: \(expandedDockFrame)")
+            print("   Dock Y range: \(expandedDockFrame.minY) to \(expandedDockFrame.maxY)")
+            print("   Drop Y: \(dropPosition.y)")
+            print("   Y in range: \(dropPosition.y >= expandedDockFrame.minY && dropPosition.y <= expandedDockFrame.maxY)")
+            print("   X in range: \(dropPosition.x >= expandedDockFrame.minX && dropPosition.x <= expandedDockFrame.maxX)")
+            print("   Contains drop: \(expandedDockFrame.contains(dropPosition))")
+        }
+
+        let screenBottom: CGFloat = 800
+        let bottomAreaThreshold: CGFloat = 200
+        let isInBottomArea = dropPosition.y > (screenBottom - bottomAreaThreshold)
+
+        if wasDraggingToDock && isInBottomArea {
+            print("✅ Dropped in bottom area - treating as dock drop!")
+        }
+
+        let droppedInDock = !dockFrame.isEmpty && expandedDockFrame.contains(dropPosition)
+        let droppedInBottomArea = isInBottomArea
+
+        if wasDraggingToDock && (droppedInDock || droppedInBottomArea) {
+            print("✅ Dropped \(track.name) into dock!")
+            let relativeX = dropPosition.x - dockFrame.minX
+            let dockWidth = dockFrame.width
+            let positionRatio = max(0, min(1, relativeX / dockWidth))
+
+            let volume: Double
+            if positionRatio < 0.33 {
+                volume = 0.20
+            } else if positionRatio < 0.67 {
+                volume = 0.50
+            } else {
+                volume = 0.85
+            }
+
+            InstrumentFeedback.dragEnd()
+
+            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                var updatedTrack = audioManager.tracks[index]
+                let wasActive = updatedTrack.isActive
+
+                updatedTrack.isActive = true
+                updatedTrack.volume = volume
+                audioManager.tracks[index] = updatedTrack
+
+                audioManager.updateTrackVolume(track.id, volume: volume)
+
+                if !wasActive {
+                    audioManager.toggleTrack(track.id, isActive: true)
+                }
+
+                if let player = audioManager.audioPlayers[track.id], player.rate == 0 {
+                    player.play()
+                }
+            }
+        } else if wasDraggingToDock {
+            InstrumentFeedback.dragEnd()
+        }
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            dragOffset = .zero
+        }
+    }
+
     var body: some View {
         // Label underneath the tile
         VStack(spacing: 6) {
@@ -1440,137 +1585,9 @@ struct GridSoundItem: View {
         // handler was dead code. It was removed in Phase 1.4; the canonical
         // toggle/volume-mode-exit logic lives in the single `.onTapGesture`
         // further below.
-        .highPriorityGesture(
-            // Drag to dock gesture - only when not in volume mode and not already active
-            !isVolumeMode && !isActive ? DragGesture(minimumDistance: 5)
-                .onChanged { value in
-                    if !isDraggingToDockLocal {
-                        isDraggingToDockLocal = true
-                        isPressed = true
-                        // Store item's position when drag starts (before offset is applied)
-                        dragStartPosition = itemPosition
-                        // Initialize current global center
-                        currentGlobalCenter = itemPosition
-                        // Notify parent to disable scrolling
-                        isDraggingToDock.insert(track.id)
-                        InstrumentFeedback.dragStart()
-                    }
-                    
-                    // Update drag offset - free movement (x and y)
-                    dragOffset = value.translation
-                }
-                .onEnded { value in
-                    isPressed = false
-                    let wasDraggingToDock = isDraggingToDockLocal
-                    isDraggingToDockLocal = false
-                    // Notify parent to re-enable scrolling
-                    isDraggingToDock.remove(track.id)
-                    
-                    // Calculate drop position in global coordinates
-                    // Calculate from start position + final translation
-                    let dropPosition = CGPoint(
-                        x: dragStartPosition.x + value.translation.width,
-                        y: dragStartPosition.y + value.translation.height
-                    )
-                    
-                    // Check if dropped over dock area (with expanded tolerance)
-                    // Expand dock frame slightly for easier drop detection
-                    let expandedDockFrame = dockFrame.isEmpty ? .zero : CGRect(
-                        x: dockFrame.minX - 20,
-                        y: dockFrame.minY - 20,
-                        width: dockFrame.width + 40,
-                        height: dockFrame.height + 40
-                    )
-                    
-                    // Debug: Log drop detection
-                    if wasDraggingToDock {
-                        print("🎯 Drop detection - Track: \(track.name)")
-                        print("   Drag start position: \(dragStartPosition)")
-                        print("   Translation: \(value.translation)")
-                        print("   Calculated drop position: \(dropPosition)")
-                        print("   Dock frame: \(dockFrame)")
-                        print("   Expanded frame: \(expandedDockFrame)")
-                        print("   Dock Y range: \(expandedDockFrame.minY) to \(expandedDockFrame.maxY)")
-                        print("   Drop Y: \(dropPosition.y)")
-                        print("   Y in range: \(dropPosition.y >= expandedDockFrame.minY && dropPosition.y <= expandedDockFrame.maxY)")
-                        print("   X in range: \(dropPosition.x >= expandedDockFrame.minX && dropPosition.x <= expandedDockFrame.maxX)")
-                        print("   Contains drop: \(expandedDockFrame.contains(dropPosition))")
-                    }
-                    
-                    // Also check if dropped in bottom area of screen (more lenient detection)
-                    // If Y is in the bottom 200 points of screen, consider it a dock drop
-                    let screenBottom: CGFloat = 800 // Approximate screen height
-                    let bottomAreaThreshold: CGFloat = 200
-                    let isInBottomArea = dropPosition.y > (screenBottom - bottomAreaThreshold)
-                    
-                    if wasDraggingToDock && isInBottomArea {
-                        print("✅ Dropped in bottom area - treating as dock drop!")
-                    }
-                    
-                    // Check if dropped over dock area OR in bottom area of screen
-                    let droppedInDock = !dockFrame.isEmpty && expandedDockFrame.contains(dropPosition)
-                    let droppedInBottomArea = isInBottomArea
-                    
-                    if wasDraggingToDock && (droppedInDock || droppedInBottomArea) {
-                        print("✅ Dropped \(track.name) into dock!")
-                        // Calculate volume based on horizontal position within dock
-                        let relativeX = dropPosition.x - dockFrame.minX
-                        let dockWidth = dockFrame.width
-                        let positionRatio = max(0, min(1, relativeX / dockWidth)) // Clamp 0-1
-                        
-                        // Determine volume based on position:
-                        // Left third (0-0.33): 20% (15-25% range)
-                        // Middle third (0.33-0.67): 50%
-                        // Right third (0.67-1.0): 85% (75-100% range)
-                        let volume: Double
-                        if positionRatio < 0.33 {
-                            // Left side: 20%
-                            volume = 0.20
-                        } else if positionRatio < 0.67 {
-                            // Middle: 50%
-                            volume = 0.50
-                        } else {
-                            // Right side: 85%
-                            volume = 0.85
-                        }
-                        
-                        InstrumentFeedback.dragEnd()
-                        
-                        // Activate track and add to mix with calculated volume
-                        // Always update when dropped into dock, regardless of current state
-                        if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
-                            var updatedTrack = audioManager.tracks[index]
-                            let wasActive = updatedTrack.isActive
-                            
-                            // Always set active and volume when dropped into dock
-                            updatedTrack.isActive = true
-                            updatedTrack.volume = volume
-                            audioManager.tracks[index] = updatedTrack
-                            
-                            // Update volume first
-                            audioManager.updateTrackVolume(track.id, volume: volume)
-                            
-                            // Toggle track if it wasn't already active
-                            if !wasActive {
-                                audioManager.toggleTrack(track.id, isActive: true)
-                            }
-                            
-                            // Ensure playback is started
-                            if let player = audioManager.audioPlayers[track.id] {
-                                if player.rate == 0 {
-                                    player.play()
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Reset drag offset with animation
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        dragOffset = .zero
-                    }
-                }
-            : nil
-        )
+        // Dock drag runs simultaneous with scroll and only arms after a half-second hold,
+        // so swiping the grid doesn't instantly pick up a tile.
+        .simultaneousGesture(!isVolumeMode && !isActive ? dragInactiveTrackToDockGesture : nil)
         .simultaneousGesture(
             // Rotation gesture for volume control (only active in volume mode)
             isVolumeMode ? DragGesture(minimumDistance: 5)
@@ -1758,11 +1775,9 @@ struct GridSoundItem: View {
                 }
             }
         }
-        .onLongPressGesture(minimumDuration: 0.4) {
-            // Wires the long-press contract that GridSoundItem already declared
-            // via its `onLongPress` parameter. Before Phase 1.4 the closure
-            // existed on the type but was never invoked from inside the body,
-            // so the modal at the parent never opened from a long press. Fixed.
+        .onLongPressGesture(minimumDuration: 0.95) {
+            // Longer hold than dock-drag (0.5s hold + small move) so mixing a sound
+            // doesn't open the aperture modal by accident.
             guard !isDraggingToDockLocal, !isVolumeMode else { return }
             InstrumentFeedback.preset(applied: track.name)
             onLongPress()
