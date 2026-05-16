@@ -1403,111 +1403,6 @@ struct Particle: Identifiable {
     var opacity: Double // Changed to var for physics updates
 }
 
-// MARK: - Central Hub View
-struct CentralHubView: View {
-    @ObservedObject var audioManager: AudioManager
-    @State private var rotationAngle: Double = 0
-    @State private var hubScale: CGFloat = 1.0
-    
-    var activeColor: Color {
-        let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
-        guard !activeTracks.isEmpty else { return AppTheme.rainBlue }
-        return SoundColor.colorForTrack(activeTracks.first?.name ?? "")
-    }
-    
-    var body: some View {
-        ZStack {
-            // Outer rotating ring
-            Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            activeColor.opacity(0.6),
-                            activeColor.opacity(0.2)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 4
-                )
-                .frame(width: 200, height: 200)
-                .rotationEffect(.degrees(rotationAngle))
-                .blur(radius: 5)
-            
-            // Main hub
-            Button {
-                InstrumentFeedback.cinema()
-                
-                if audioManager.isPlaying {
-                    audioManager.pause()
-                } else {
-                    audioManager.play()
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: audioManager.isPlaying ? [
-                                            activeColor,
-                                            activeColor.opacity(0.5)
-                                        ] : [
-                                            Color.white.opacity(0.3),
-                                            Color.white.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 3
-                                )
-                        )
-                        .frame(width: 150, height: 150)
-                        .shadow(color: activeColor.opacity(0.6), radius: 40, x: 0, y: 20)
-                    
-                    Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 50, weight: .light, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    activeColor,
-                                    activeColor.opacity(0.8)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-                .scaleEffect(hubScale)
-            }
-            .onAppear {
-                if audioManager.isPlaying {
-                    withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                        rotationAngle = 360
-                    }
-                }
-            }
-            .onChange(of: audioManager.isPlaying) { _, isPlaying in
-                if isPlaying {
-                    withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                        rotationAngle = 360
-                    }
-                    withAnimation(AppTheme.Animation.spring) {
-                        hubScale = 1.1
-                    }
-                } else {
-                    withAnimation(AppTheme.Animation.smooth) {
-                        rotationAngle = 0
-                        hubScale = 1.0
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Enhanced Dynamic Immersive Background
 struct ImmersiveBackground: View {
     let activeTracks: [AudioTrack]
@@ -2042,46 +1937,12 @@ struct GridSoundItem: View {
                     }
             }
         )
-        .onTapGesture {
-            // Tap to toggle sound on/off (not open modal)
-            // Only toggle if not dragging
-            guard !isDraggingToDockLocal else { return }
-            
-            InstrumentFeedback.tap()
-            
-            // Toggle track on/off
-            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
-                let currentTrack = audioManager.tracks[index]
-                let newActiveState = !currentTrack.isActive
-                
-                print("🎵 Grid tile tap: \(track.name) - \(currentTrack.isActive ? "ON" : "OFF") → \(newActiveState ? "ON" : "OFF")")
-                
-                // Toggle track FIRST (before updating array) - this handles play/pause correctly
-                audioManager.toggleTrack(track.id, isActive: newActiveState)
-                
-                // Now update the array state
-                var updatedTrack = currentTrack
-                updatedTrack.isActive = newActiveState
-                
-                if newActiveState {
-                    // If activating, set default volume
-                    if updatedTrack.volume == 0 {
-                        updatedTrack.volume = 0.5
-                    }
-                    audioManager.tracks[index] = updatedTrack
-                    audioManager.updateTrackVolume(track.id, volume: updatedTrack.volume)
-                } else {
-                    // If deactivating, set volume to 0
-                    updatedTrack.volume = 0.0
-                    audioManager.tracks[index] = updatedTrack
-                    audioManager.updateTrackVolume(track.id, volume: 0.0)
-                }
-                
-                // Save mix state after user interaction
-                let activeTracks = audioManager.tracks.filter { $0.isActive && $0.volume > 0 }
-                StatePersistenceService.shared.saveLastActiveMix(activeTracks)
-            }
-        }
+        // NOTE: A second `.onTapGesture` was previously defined later in this
+        // view's modifier chain. In SwiftUI only one `.onTapGesture` ultimately
+        // recognizes the tap (the last-applied one wins), so the earlier
+        // handler was dead code. It was removed in Phase 1.4; the canonical
+        // toggle/volume-mode-exit logic lives in the single `.onTapGesture`
+        // further below.
         .highPriorityGesture(
             // Drag to dock gesture - only when not in volume mode and not already active
             !isVolumeMode && !isActive ? DragGesture(minimumDistance: 5)
@@ -2326,6 +2187,9 @@ struct GridSoundItem: View {
             : nil
         )
         .onTapGesture {
+            // Suppress tap while a drag-to-dock gesture is in flight.
+            guard !isDraggingToDockLocal else { return }
+
             // If in volume mode, exit volume mode
             if isVolumeMode {
                 isDragging = false
@@ -2396,6 +2260,15 @@ struct GridSoundItem: View {
                     }
                 }
             }
+        }
+        .onLongPressGesture(minimumDuration: 0.4) {
+            // Wires the long-press contract that GridSoundItem already declared
+            // via its `onLongPress` parameter. Before Phase 1.4 the closure
+            // existed on the type but was never invoked from inside the body,
+            // so the modal at the parent never opened from a long press. Fixed.
+            guard !isDraggingToDockLocal, !isVolumeMode else { return }
+            InstrumentFeedback.preset(applied: track.name)
+            onLongPress()
         }
         .onChange(of: isVolumeMode) { _, showing in
             if !showing {

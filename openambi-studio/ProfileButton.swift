@@ -3,12 +3,12 @@ import SwiftUI
 struct ProfileButton: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var showAuthSheet = false
-    @State private var showSettingsSheet = false
+    @State private var showProfileSheet = false
     
     var body: some View {
         Button(action: {
             if authManager.isAuthenticated {
-                showSettingsSheet = true
+                showProfileSheet = true
             } else {
                 showAuthSheet = true
             }
@@ -30,8 +30,10 @@ struct ProfileButton: View {
             AuthenticationView(authManager: authManager)
                 .presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $showSettingsSheet) {
-            SettingsView()
+        .sheet(isPresented: $showProfileSheet) {
+            // Identity-only sheet. The full Settings surface lives on the
+            // Atelier tab (Settings tab) so the IA is no longer duplicated.
+            ProfileEditView(authManager: authManager)
                 .presentationDetents([.medium, .large])
         }
         .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
