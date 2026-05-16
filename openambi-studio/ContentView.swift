@@ -6,7 +6,7 @@ struct ContentView: View {
     @State private var hasAppeared = false
     @State private var showLoadingScreen = true
     @State private var loadingComplete = false
-    @State private var selectedTab = 1 // Start at main screen (index 1)
+    @State private var selectedTab = Room.studio.rawValue // Start at Studio (main)
     
     var body: some View {
         ZStack {
@@ -21,28 +21,34 @@ struct ContentView: View {
                         .transition(.opacity)
                 } else {
                     if hasAppeared {
-                        // Horizontal swipeable TabView
-                        // Index 0: Recording (swipe right from main)
-                        // Index 1: Main Soundscape3DView (default)
-                        // Index 2: Settings (swipe left from main)
-                        TabView(selection: $selectedTab) {
-                            // Recording screen (swipe right from main)
-                            RecordingView(selectedTab: $selectedTab)
-                                .tag(0)
-                                .ignoresSafeArea(.all)
-                            
-                            // Main Soundscape3DView (default)
-                            Soundscape3DView(selectedTab: $selectedTab)
-                                .tag(1)
-                                .ignoresSafeArea(.all)
-                            
-                            // Settings screen (swipe left from main)
-                            SettingsView()
-                                .tag(2)
-                                .ignoresSafeArea(.all)
+                        // Horizontal swipeable TabView mapped to the three
+                        // openambi rooms (Phase 2 IA). The system page dots
+                        // were already hidden — the chromatic PageRail
+                        // overlay below provides a quieter, brand-aware
+                        // indicator that picks up the active sound color.
+                        // Index 0: Field    (swipe right from main)
+                        // Index 1: Studio   (default)
+                        // Index 2: Atelier  (swipe left from main)
+                        ZStack(alignment: .bottom) {
+                            TabView(selection: $selectedTab) {
+                                RecordingView(selectedTab: $selectedTab)
+                                    .tag(Room.field.rawValue)
+                                    .ignoresSafeArea(.all)
+
+                                Soundscape3DView(selectedTab: $selectedTab)
+                                    .tag(Room.studio.rawValue)
+                                    .ignoresSafeArea(.all)
+
+                                SettingsView()
+                                    .tag(Room.atelier.rawValue)
+                                    .ignoresSafeArea(.all)
+                            }
+                            .tabViewStyle(.page(indexDisplayMode: .never))
+                            .indexViewStyle(.page(backgroundDisplayMode: .never))
+
+                            PageRail(selectedIndex: $selectedTab)
+                                .padding(.bottom, 18)
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .indexViewStyle(.page(backgroundDisplayMode: .never))
                         .transition(.opacity)
                     } else {
                         // Show same background as loading screen during transition
