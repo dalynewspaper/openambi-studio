@@ -6,7 +6,8 @@ struct OpenAmbiStudioApp: App {
     // Shared managers for the entire app
     @StateObject private var audioManager = AudioManager()
     @StateObject private var authManager = AuthManager()
-    
+    @StateObject private var compositionSession = CompositionSession.shared
+
     var body: some Scene {
         WindowGroup {
             // App is always accessible - authentication is optional
@@ -14,10 +15,11 @@ struct OpenAmbiStudioApp: App {
                 // Root background - extends fully to all edges including safe areas
                 AppTheme.background
                     .ignoresSafeArea(.all)
-                
+
                 ContentView()
                     .environmentObject(audioManager)
                     .environmentObject(authManager)
+                    .environmentObject(compositionSession)
                     .onContinueUserActivity("INPlayMediaIntent") { userActivity in
                         // Handle Siri shortcut to play
                         OpenAmbiShortcuts.handleShortcut("toggle", audioManager: audioManager)

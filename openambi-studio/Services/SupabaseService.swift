@@ -303,10 +303,15 @@ class SupabaseService: ObservableObject {
         fileSize: Int64,
         locationName: String?,
         latitude: Double?,
-        longitude: Double?
+        longitude: Double?,
+        videoFileURL: URL? = nil,
+        videoExtension: String? = nil,
+        recordingId: UUID? = nil
     ) async throws -> AudioTrack {
-        // Generate recording ID
-        let recordingId = UUID()
+        // Use the caller-supplied id so audio + video share `{id}.{ext}`
+        // across their two buckets. Recordings created from the mic still
+        // pass nil and we mint a fresh uuid here.
+        let recordingId = recordingId ?? UUID()
         
         // Construct file path: {user_id}/{recording_id}.m4a
         // This matches: supabase.storage.from("user-recordings").upload(`${user.id}/${filename}`, fileBlob)
@@ -367,15 +372,36 @@ class SupabaseService: ObservableObject {
         }
         
         print("✅ Successfully uploaded recording to: \(filePath)")
+
+        // OPTIONAL: video upload. The caller is in charge of cleanup of
+        // both audio and video temp files; here we only handle the wire.
+        // Strict mode: if a video was requested but the upload fails, we
+        // bubble the error so the caller can decide whether to retry.
+        var videoFilePath: String? = nil
+        if let videoFileURL = videoFileURL, let videoExtension = videoExtension {
+            do {
+                videoFilePath = try await uploadRecordingVideo(
+                    videoFileURL: videoFileURL,
+                    videoExtension: videoExtension,
+                    accessToken: accessToken,
+                    userId: userId,
+                    recordingId: recordingId
+                )
+            } catch {
+                print("❌ Video upload failed: \(error.localizedDescription)")
+                throw error
+            }
+        }
+
         print("📝 Now attempting database insert...")
-        
+
         // Create database entry using insert_user_recording function
         // This function uses SECURITY DEFINER to bypass RLS policies
         let functionURL = URL(string: "\(SupabaseConfig.apiURL)/rpc/insert_user_recording")!
         print("📝 Function URL constructed: \(functionURL)")
         var functionRequest = createRequest(url: functionURL, method: "POST", accessToken: accessToken)
         functionRequest.setValue("return=representation", forHTTPHeaderField: "Prefer")
-        
+
         // Prepare function parameters
         // The function will automatically set user_id from auth.uid()
         var payload: [String: Any] = [
@@ -386,7 +412,7 @@ class SupabaseService: ObservableObject {
             "p_category": category,
             "p_icon": icon
         ]
-        
+
         // Add optional fields if provided
         if let description = description {
             payload["p_description"] = description
@@ -399,6 +425,9 @@ class SupabaseService: ObservableObject {
         }
         if let longitude = longitude {
             payload["p_longitude"] = longitude
+        }
+        if let videoFilePath = videoFilePath {
+            payload["p_video_file_path"] = videoFilePath
         }
         
         functionRequest.httpBody = try JSONSerialization.data(withJSONObject: payload)
@@ -474,8 +503,16 @@ class SupabaseService: ObservableObject {
         print("🎵 Constructed audio URL for playback: \(audioUrl)")
         print("🎵 Storage URL base: \(SupabaseConfig.storageURL)")
         print("🎵 File path: \(filePath)")
-        
-        // Return AudioTrack
+
+        // Construct video public URL when present so the immediate AudioTrack
+        // returned to the caller can drive composition without waiting on
+        // the next library refresh.
+        let videoUrl: String? = videoFilePath.map { path in
+            let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+            return "\(SupabaseConfig.storageURL)/object/public/user-recording-videos/\(encoded)"
+        }
+        if let v = videoUrl { print("🎬 Constructed video URL: \(v)") }
+
         return AudioTrack(
             id: recordingId,
             name: title,
@@ -492,8 +529,77 @@ class SupabaseService: ObservableObject {
             duration: duration,
             locationName: locationName,
             latitude: latitude,
-            longitude: longitude
+            longitude: longitude,
+            videoUrl: videoUrl
         )
+    }
+
+    // MARK: - Upload Recording Video
+    /// Uploads `videoFileURL` to `user-recording-videos/{userId}/{recordingId}.{ext}`
+    /// and returns the stored file path on success. Mirrors the audio
+    /// upload exactly: per-user prefix, upsert, MIME type matched to the
+    /// extension, auth via the provided access token.
+    private func uploadRecordingVideo(
+        videoFileURL: URL,
+        videoExtension: String,
+        accessToken: String,
+        userId: UUID,
+        recordingId: UUID
+    ) async throws -> String {
+        let ext = videoExtension.lowercased()
+        let mime: String
+        switch ext {
+        case "mp4": mime = "video/mp4"
+        case "mov": mime = "video/quicktime"
+        case "m4v": mime = "video/x-m4v"
+        default:    mime = "video/mp4"
+        }
+
+        let fileName = "\(recordingId.uuidString).\(ext)"
+        let filePath = "\(userId.uuidString)/\(fileName)"
+
+        let encodedUserId = userId.uuidString.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId.uuidString
+        let encodedFileName = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? fileName
+        let storageURL = URL(string: "\(SupabaseConfig.storageURL)/object/user-recording-videos/\(encodedUserId)/\(encodedFileName)")!
+
+        var uploadRequest = URLRequest(url: storageURL)
+        uploadRequest.httpMethod = "POST"
+        uploadRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        uploadRequest.setValue(supabaseKey, forHTTPHeaderField: "apikey")
+        uploadRequest.setValue(mime, forHTTPHeaderField: "Content-Type")
+        uploadRequest.setValue("binary", forHTTPHeaderField: "x-upsert")
+
+        let fileData = try Data(contentsOf: videoFileURL, options: .mappedIfSafe)
+        uploadRequest.httpBody = fileData
+
+        print("🎬 Starting video upload to: \(storageURL)")
+        print("🎬 Video file size: \(fileData.count) bytes (\(mime))")
+
+        let (data, response) = try await urlSession.data(for: uploadRequest)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+
+        print("🎬 Video upload response: \(httpResponse.statusCode)")
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("❌ Failed to upload recording VIDEO: \(httpResponse.statusCode) - \(errorMessage)")
+
+            if errorMessage.contains("Bucket not found") {
+                throw SupabaseError.bucketNotFound
+            } else if httpResponse.statusCode == 401 {
+                throw SupabaseError.unauthorized
+            } else if httpResponse.statusCode == 403 {
+                throw SupabaseError.forbidden
+            } else {
+                throw SupabaseError.networkError("video upload failed: \(errorMessage)")
+            }
+        }
+
+        print("✅ Successfully uploaded video to: \(filePath)")
+        return filePath
     }
     
     // MARK: - Fetch User Recordings (for authenticated users)
@@ -564,8 +670,16 @@ class SupabaseService: ObservableObject {
             let audioTracks: [AudioTrack] = activeRecordings.compactMap { recording in
                 // Construct storage URL
                 let audioUrl = "\(SupabaseConfig.storageURL)/object/public/user-recordings/\(recording.file_path)"
+                // If the recording carries a video, mirror the same public-URL scheme
+                // for the user-recording-videos bucket. Encoded per-component so any
+                // exotic file names survive the round trip.
+                let videoUrl: String? = recording.video_file_path.map { path in
+                    let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+                    return "\(SupabaseConfig.storageURL)/object/public/user-recording-videos/\(encoded)"
+                }
                 print("🎵 Loading user recording: \(recording.name)")
                 print("🎵 Audio URL: \(audioUrl)")
+                if let v = videoUrl { print("🎬 Video URL: \(v)") }
                 print("🎵 File path from DB: \(recording.file_path)")
                 
                 // Parse dates - use recorded_at if available, otherwise fallback to created_at
@@ -603,7 +717,8 @@ class SupabaseService: ObservableObject {
                     duration: duration,
                     locationName: recording.location_name,
                     latitude: recording.latitude,
-                    longitude: recording.longitude
+                    longitude: recording.longitude,
+                    videoUrl: videoUrl
                 )
             }
             
@@ -621,33 +736,53 @@ class SupabaseService: ObservableObject {
     }
     
     // MARK: - Update User Recording
+    /// `videoFilePath`: a double-optional sentinel for whether the caller
+    /// wants to touch the video field at all.
+    ///   - `nil`             → leave the video field untouched
+    ///   - `.some(nil)`      → explicitly clear the field (DROP the background)
+    ///   - `.some(.some(p))` → set the field to `p`
+    /// The RPC takes `p_update_video bool` + `p_video_file_path text` to
+    /// disambiguate these three cases server-side.
     func updateUserRecording(
         accessToken: String,
         recordingId: UUID,
         name: String,
         category: String,
         description: String?,
-        icon: String
+        icon: String,
+        videoFilePath: String?? = nil
     ) async throws {
         // Use the update_user_recording function via RPC for better reliability
         let functionURL = URL(string: "\(SupabaseConfig.apiURL)/rpc/update_user_recording")!
         var functionRequest = createRequest(url: functionURL, method: "POST", accessToken: accessToken)
         functionRequest.setValue("return=representation", forHTTPHeaderField: "Prefer")
         functionRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         var payload: [String: Any] = [
             "p_id": recordingId.uuidString,
             "p_name": name,
             "p_category": category,
             "p_icon": icon
         ]
-        
+
         if let description = description {
             payload["p_description"] = description
         } else {
             payload["p_description"] = NSNull()
         }
-        
+
+        // Video field handling — double-optional sentinel.
+        if let resolvedVideo = videoFilePath {
+            payload["p_update_video"] = true
+            if let path = resolvedVideo {
+                payload["p_video_file_path"] = path
+            } else {
+                payload["p_video_file_path"] = NSNull()
+            }
+        } else {
+            payload["p_update_video"] = false
+        }
+
         functionRequest.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
         print("🔧 Updating recording via function: \(recordingId)")
@@ -838,6 +973,7 @@ private struct SupabaseUserRecording: Codable {
     let created_at: String?
     let updated_at: String?
     let deleted_at: String?  // Add deleted_at to verify filtering
+    let video_file_path: String?  // Optional immersive-background video path
     
     // Computed property to convert duration_seconds to Double
     var duration: Double? {

@@ -63,6 +63,10 @@
 		BD000000000000000000D300 /* AtelierHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000D301 /* AtelierHeader.swift */; };
 		BD000000000000000000D400 /* AtelierIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000D401 /* AtelierIdentity.swift */; };
 		BD000000000000000000D500 /* AtelierSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000D501 /* AtelierSection.swift */; };
+		BD000000000000000000E200 /* VideoIngest.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000E201 /* VideoIngest.swift */; };
+		BD000000000000000000E300 /* SourcePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000E301 /* SourcePicker.swift */; };
+		BD000000000000000000E400 /* CompositionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000E401 /* CompositionSession.swift */; };
+		BD000000000000000000E500 /* RoomBackgroundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000E501 /* RoomBackgroundPlayer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -149,6 +153,10 @@
 		BD000000000000000000D301 /* AtelierHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtelierHeader.swift; sourceTree = "<group>"; };
 		BD000000000000000000D401 /* AtelierIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtelierIdentity.swift; sourceTree = "<group>"; };
 		BD000000000000000000D501 /* AtelierSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtelierSection.swift; sourceTree = "<group>"; };
+		BD000000000000000000E201 /* VideoIngest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoIngest.swift; sourceTree = "<group>"; };
+		BD000000000000000000E301 /* SourcePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcePicker.swift; sourceTree = "<group>"; };
+		BD000000000000000000E401 /* CompositionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionSession.swift; sourceTree = "<group>"; };
+		BD000000000000000000E501 /* RoomBackgroundPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomBackgroundPlayer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -220,6 +228,7 @@
 				8FB5687D6F1C58CADA098843 /* LaunchScreen.storyboard */,
 				B59A619D4379AD3355AAF72B /* Theme.swift */,
 				F9A8B7C6D5E4F3A2B1C0D9E9 /* Soundscape3DView.swift */,
+				BD000000000000000000E501 /* RoomBackgroundPlayer.swift */,
 				B9C0D1E2F3A4B5C6D7E8F9A1 /* AuthenticationView.swift */,
 				C1D2E3F4A5B6C7D8E9F0A2 /* ProfileButton.swift */,
 				C9D0E1F2A3B4C5D6E7F8AA /* SimpleLoadingView.swift */,
@@ -263,6 +272,7 @@
 				BD000000000000000000B801 /* PageRail.swift */,
 				BD000000000000000000C201 /* RecordingPalette.swift */,
 				BD000000000000000000C401 /* AuroraLoader.swift */,
+				BD000000000000000000E301 /* SourcePicker.swift */,
 			);
 			path = Brand;
 			sourceTree = "<group>";
@@ -285,6 +295,8 @@
 				BD000000000000000000B501 /* AmbientFeatureFlags.swift */,
 				BD000000000000000000E101 /* WindowMetrics.swift */,
 				BD000000000000000000C701 /* PlaceObserver.swift */,
+				BD000000000000000000E201 /* VideoIngest.swift */,
+				BD000000000000000000E401 /* CompositionSession.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -470,6 +482,10 @@
 				BD000000000000000000D300 /* AtelierHeader.swift in Sources */,
 				BD000000000000000000D400 /* AtelierIdentity.swift in Sources */,
 				BD000000000000000000D500 /* AtelierSection.swift in Sources */,
+				BD000000000000000000E200 /* VideoIngest.swift in Sources */,
+				BD000000000000000000E300 /* SourcePicker.swift in Sources */,
+				BD000000000000000000E400 /* CompositionSession.swift in Sources */,
+				BD000000000000000000E500 /* RoomBackgroundPlayer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -524,7 +540,7 @@
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = LVH8Z2THG7;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -589,7 +605,7 @@
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = LVH8Z2THG7;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -669,7 +685,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -752,7 +768,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

@@ -822,7 +822,8 @@ struct ImmersiveBackground: View {
     @State private var colorOrbs: [ColorOrb] = []
     @State private var animationTimer: Timer?
     @ObservedObject private var featureFlags = AmbientFeatureFlags.shared
-    
+    @EnvironmentObject private var composition: CompositionSession
+
     struct ColorOrb: Identifiable {
         let id = UUID()
         var position: CGPoint
@@ -832,13 +833,37 @@ struct ImmersiveBackground: View {
         var pulsePhase: Double = 0
         var velocity: CGSize = .zero
     }
-    
+
+    /// Resolved background video for the current composition, gated by
+    /// the Low Power feature flag. When non-nil we render the player as
+    /// the bottommost layer and pull every procedural wash above it
+    /// down a notch so the room reads as "this video, dressed."
+    private var backgroundVideoURL: URL? {
+        guard featureFlags.allowBackgroundVideo else { return nil }
+        return composition.resolvedVideoURL(in: activeTracks)
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Enhanced base gradient - edge-to-edge, extends fully
+                // Bottom layer: muted, looped, blurred composition video
+                // when one has been chosen. Drives the room's "this is the
+                // place" cue; everything else layers on top with reduced
+                // opacity so the scene reads through the chrome.
+                if let videoURL = backgroundVideoURL {
+                    RoomBackgroundPlayer(url: videoURL)
+                        .ignoresSafeArea(.all)
+                        .transition(.opacity)
+                }
+
+                // Enhanced base gradient - edge-to-edge, extends fully.
+                // When the video layer is showing, drop the gradient's
+                // opacity so the scene shows through rather than being
+                // covered up by the deep-space wash.
                 AppTheme.background
                     .ignoresSafeArea(.all)
+                    .opacity(backgroundVideoURL == nil ? 1.0 : 0.4)
+                    .animation(Motion.cinema, value: backgroundVideoURL)
                 
                 // Liquid Glass Layer 1: Content-driven color gradient
                 if !activeTracks.isEmpty {
@@ -1964,12 +1989,13 @@ struct SoundControlModal: View {
     @ObservedObject var audioManager: AudioManager
     let topSafeArea: CGFloat
     let onDismiss: () -> Void
-    
+
     // CRITICAL: Store track ID at initialization to ensure we always reference the correct track
     private let trackId: UUID
-    
+
     @State private var currentVolume: Double
     @State private var isDraggingSlider = false
+    @EnvironmentObject private var composition: CompositionSession
     
     init(track: AudioTrack, audioManager: AudioManager, topSafeArea: CGFloat, onDismiss: @escaping () -> Void) {
         self.track = track
@@ -2148,10 +2174,54 @@ struct SoundControlModal: View {
                 volumeSlider(trackColor: trackColor, displayVolume: displayVolume)
             }
             
+            // "Use as room background" — only appears when the track carries
+            // a video. Tapping toggles the composition's background id; the
+            // copy and tint flip when this track is already the room.
+            if track.videoUrl != nil {
+                let isBackground = composition.backgroundRecordingId == trackId
+                Button(action: {
+                    InstrumentFeedback.toggle(active: !isBackground)
+                    composition.toggle(trackId)
+                }) {
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: isBackground ? "film.fill" : "film")
+                            .font(.system(size: 17, weight: .medium))
+                        Text(isBackground ? "this scene is the room" : "use as room background")
+                            .font(AuroraTypography.editorial(15, weight: .medium))
+                    }
+                    .foregroundColor(
+                        isBackground ? AuroraColors.TextOnAurora.primary : AuroraColors.TextOnAurora.secondary
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                Capsule()
+                                    .fill(isBackground ? trackColor.opacity(0.18) : .clear)
+                            )
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(
+                                        isBackground ? trackColor.opacity(0.6) : AuroraColors.Stroke.edge,
+                                        lineWidth: 1
+                                    )
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel(
+                    isBackground
+                        ? "This scene is currently the room background. Tap to remove."
+                        : "Use \(track.name) as the room background"
+                )
+            }
+
             // Remove button - standard Button (no gesture conflicts)
             Button(action: {
                 InstrumentFeedback.dragEnd()
-                
+
                 print("🗑️ Remove from Mix: \(track.name)")
                 
                 // CRITICAL: Use stored trackId to ensure we're removing the correct track

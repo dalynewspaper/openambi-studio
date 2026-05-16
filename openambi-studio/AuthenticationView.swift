@@ -95,6 +95,26 @@ struct AuthenticationView: View {
                 }
             }
         case .failure(let error):
+            // Always dump the raw error to the console so we can diagnose
+            // the cases that `ASAuthorizationError.unknown` obscures
+            // (Apple auth daemon failures, AKAuthentication errors, bundle-
+            // ID/service mismatches, network drops, etc.). The visible
+            // message stays editorial; the console is where the truth lives.
+            let nsError = error as NSError
+            print("🛑 Apple Sign In failed")
+            print("   domain: \(nsError.domain)")
+            print("   code:   \(nsError.code)")
+            print("   desc:   \(nsError.localizedDescription)")
+            if !nsError.userInfo.isEmpty {
+                print("   userInfo:")
+                for (key, value) in nsError.userInfo {
+                    print("     \(key) = \(value)")
+                }
+            }
+            if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                print("   underlying: \(underlying.domain) / \(underlying.code) — \(underlying.localizedDescription)")
+            }
+
             Task { @MainActor in
                 if let authError = error as? ASAuthorizationError {
                     switch authError.code {
@@ -107,16 +127,19 @@ struct AuthenticationView: View {
                     case .notHandled:
                         authManager.errorMessage = "Sign in with Apple is not available on this device."
                     case .unknown:
-                        // The `unknown` code is what the Authentication Services
-                        // framework throws when it can't reach Apple ID — on a
-                        // simulator this almost always means there's no iCloud
-                        // account signed into the sim itself. Disambiguating
-                        // the copy here saves a confused round-trip during
-                        // local development and beta testing.
+                        // `.unknown` is a catch-all that hides several
+                        // distinct causes: missing iCloud on a simulator,
+                        // network failure, Apple-server outage, the bundle
+                        // ID not having Sign in with Apple enabled in the
+                        // Apple Developer portal, or an AKAuthentication
+                        // daemon failure. Surface whatever detail the
+                        // underlying NSError carries so the user (and we)
+                        // get a real signal instead of a single guess.
+                        let detail = friendlyUnknownDetail(from: nsError)
                         #if targetEnvironment(simulator)
-                        authManager.errorMessage = "Sign in with Apple needs an iCloud account on this simulator. Open the simulator's Settings app and sign in to iCloud first — or run on a real device."
+                        authManager.errorMessage = "Apple couldn't complete sign in.\n\n\(detail)\n\nIn the simulator this is often a missing iCloud account (Settings ▸ Sign in to your iPhone) or that Apple's auth daemon hasn't been registered for this app. Running on a real device usually clears it."
                         #else
-                        authManager.errorMessage = "Sign in with Apple couldn't reach Apple ID. Check your connection and try again."
+                        authManager.errorMessage = "Apple couldn't complete sign in.\n\n\(detail)"
                         #endif
                     @unknown default:
                         authManager.errorMessage = "Authentication error. Please try again."
@@ -127,6 +150,19 @@ struct AuthenticationView: View {
                 authManager.isLoading = false
             }
         }
+    }
+
+    /// Best-effort short, readable detail extracted from the underlying
+    /// NSError. Falls back to `localizedDescription` when nothing better
+    /// is available.
+    private func friendlyUnknownDetail(from nsError: NSError) -> String {
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            return "[\(underlying.domain) \(underlying.code)] \(underlying.localizedDescription)"
+        }
+        if let reason = nsError.localizedFailureReason {
+            return reason
+        }
+        return nsError.localizedDescription
     }
 }
 

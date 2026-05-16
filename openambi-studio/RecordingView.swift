@@ -23,6 +23,15 @@ struct RecordingView: View {
     @State private var showError = false
     @State private var errorMessage = ""
 
+    // "Bring it in" flow state. The source sheet sits between the orb and
+    // the Field Note save view; while ingest is running we keep the sheet
+    // open and overlay a small editorial loader so the user can read what
+    // we're doing ("listening to your scene…") without losing context.
+    @State private var showSourcePicker = false
+    @State private var isIngesting = false
+    @State private var ingestedClip: IngestedVideo?
+    @State private var ingestError: String?
+
     var body: some View {
         ZStack {
             // Background gradient — kept from the v1 capture screen.
@@ -67,7 +76,7 @@ struct RecordingView: View {
         }
         .sheet(item: $recordingResult) { result in
             RecordingMetadataView(
-                recordingResult: result,
+                source: .recorded(result),
                 onSave: { track in
                     audioManager.loadTracks(audioManager.tracks + [track])
                     recordingResult = nil
@@ -86,6 +95,47 @@ struct RecordingView: View {
             )
             .environmentObject(audioManager)
         }
+        .sheet(isPresented: $showSourcePicker) {
+            ZStack {
+                SourcePicker(
+                    onPicked: { url in handleSourcePicked(url: url) },
+                    onCancel: {
+                        showSourcePicker = false
+                        ingestError = nil
+                    },
+                    externalError: $ingestError
+                )
+
+                if isIngesting {
+                    ZStack {
+                        Color.black.opacity(0.55).ignoresSafeArea()
+                        AuroraLoader.Modal(
+                            title: "listening to your scene…",
+                            subtitle: "lifting the audio out"
+                        )
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $ingestedClip) { clip in
+            RecordingMetadataView(
+                source: .imported(clip),
+                onSave: { track in
+                    audioManager.loadTracks(audioManager.tracks + [track])
+                    ingestedClip = nil
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        selectedTab = Room.studio.rawValue
+                    }
+                },
+                onCancel: {
+                    VideoIngest.shared.cleanup(clip)
+                    ingestedClip = nil
+                }
+            )
+            .environmentObject(audioManager)
+        }
         .alert("Recording Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -95,6 +145,37 @@ struct RecordingView: View {
             if case .error(let message) = newState {
                 errorMessage = message
                 showError = true
+            }
+        }
+    }
+
+    /// Run ingest on the picked URL, then transition from the source sheet
+    /// into the Field Note save view. Errors stay inside the source sheet
+    /// as an editorial inline message — we never use a system alert here.
+    private func handleSourcePicked(url: URL) {
+        isIngesting = true
+        ingestError = nil
+        Task {
+            do {
+                let ingested = try await VideoIngest.shared.ingest(from: url)
+                await MainActor.run {
+                    isIngesting = false
+                    showSourcePicker = false
+                    ingestedClip = ingested
+                    InstrumentFeedback.success()
+                }
+            } catch let error as VideoIngestError {
+                await MainActor.run {
+                    isIngesting = false
+                    ingestError = error.errorDescription
+                    InstrumentFeedback.warning()
+                }
+            } catch {
+                await MainActor.run {
+                    isIngesting = false
+                    ingestError = "couldn't open this video — try another"
+                    InstrumentFeedback.warning()
+                }
             }
         }
     }
@@ -161,6 +242,14 @@ struct RecordingView: View {
 
             statusText
 
+            // A quiet sibling to the record orb. The orb is "the world coming
+            // in" through the mic; this capsule is "or the world you already
+            // captured, brought in from elsewhere." Hidden while recording so
+            // it doesn't become a distraction.
+            bringItInAffordance
+                .opacity(isCurrentlyRecording ? 0 : 1)
+                .animation(Motion.touch, value: isCurrentlyRecording)
+
             Spacer(minLength: 0)
 
             Text(buttonHintText)
@@ -168,6 +257,37 @@ struct RecordingView: View {
                 .foregroundColor(AuroraColors.TextOnAurora.tertiary)
                 .padding(.bottom, 24)
         }
+    }
+
+    /// "or bring something in" — a ghost capsule under the record orb.
+    /// Tap target is generous (≥44pt) but visually it's a hairline; it
+    /// reads as a footnote to the orb, never as a competing CTA.
+    private var bringItInAffordance: some View {
+        Button(action: {
+            InstrumentFeedback.tap()
+            ingestError = nil
+            showSourcePicker = true
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(AuroraColors.TextOnAurora.secondary)
+                Text("or bring something in")
+                    .font(AuroraTypography.editorial(13, weight: .medium))
+                    .foregroundColor(AuroraColors.TextOnAurora.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .background(
+                Capsule(style: .continuous)
+                    .strokeBorder(AuroraColors.Stroke.edge, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isCurrentlyRecording)
+        .accessibilityLabel("Bring a video in from your photos or files")
+        .accessibilityHint("Opens a source picker to import an existing clip as a field note")
     }
 
     /// Single-line headline that adapts to recording state.

@@ -60,6 +60,7 @@ struct AudioTrack: Identifiable, Codable, Equatable {
     var latitude: Double? = nil
     var longitude: Double? = nil
     var imageUrl: String? = nil
+    var videoUrl: String? = nil // Optional immersive-background video for user recordings
     var playCount: Int = 0
     var lastPlayedAt: Date? = nil
     
@@ -92,6 +93,7 @@ struct AudioTrack: Identifiable, Codable, Equatable {
         latitude: Double? = nil,
         longitude: Double? = nil,
         imageUrl: String? = nil,
+        videoUrl: String? = nil,
         playCount: Int = 0,
         lastPlayedAt: Date? = nil
     ) {
@@ -113,6 +115,7 @@ struct AudioTrack: Identifiable, Codable, Equatable {
         self.latitude = latitude
         self.longitude = longitude
         self.imageUrl = imageUrl
+        self.videoUrl = videoUrl
         self.playCount = playCount
         self.lastPlayedAt = lastPlayedAt
     }
