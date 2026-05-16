@@ -144,18 +144,17 @@ struct RecordingsLibrarySection: View {
         } else if recordings.isEmpty {
             emptyPlaceholder
         } else {
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 14) {
                 ForEach(recordings) { recording in
-                    RecordingRow(
+                    LibraryCard(
                         recording: recording,
-                        onDelete: {
-                            Task { @MainActor in await smartRefresh() }
-                        },
-                        onEdit: {
-                            selectedRecording = recording
+                        isActiveInMix: isActiveInMix(recording),
+                        onTapEdit: { selectedRecording = recording },
+                        onToggleMix: { newActive in
+                            ensureTrackLoaded(recording)
+                            audioManager.toggleTrack(recording.id, isActive: newActive)
                         }
                     )
-                    .environmentObject(audioManager)
                 }
             }
         }
@@ -303,94 +302,25 @@ struct RecordingsLibrarySection: View {
     private func refreshRecordingsPreservingDeletions(deletedRecordingId: UUID) async {
         await smartRefresh()
     }
-}
 
-// MARK: - Recording row
-//
-// Moved here from the deleted `UserRecordingsView.swift`. The row's visual
-// design (rectangular liquid-glass card) is preserved verbatim in 2.2 so
-// this commit is purely structural. Phase 2.3 replaces this with the
-// palette-extracted circular card.
-struct RecordingRow: View {
-    let recording: AudioTrack
-    let onDelete: () -> Void
-    let onEdit: () -> Void
-    @EnvironmentObject var audioManager: AudioManager
-    @State private var recordingDuration: TimeInterval? = nil
+    // MARK: - Mix helpers
 
-    var body: some View {
-        Button(action: { onEdit() }) {
-            HStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.3, green: 0.5, blue: 1.0).opacity(0.4),
-                                    Color(red: 0.5, green: 0.3, blue: 1.0).opacity(0.3)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 70, height: 70)
-                        .liquidGlass(intensity: 0.9, cornerRadius: 35, blurIntensity: .light, opacityLevel: .content)
-                        .shadow(color: Color(red: 0.3, green: 0.5, blue: 1.0).opacity(0.3), radius: 10, x: 0, y: 5)
-
-                    Image(systemName: recording.icon)
-                        .font(.system(size: 28, weight: .medium))
-                        .foregroundColor(.white.opacity(0.95))
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(recording.name)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    if !recording.category.isEmpty {
-                        Text(recording.category)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-
-                    if let duration = recording.duration {
-                        Text(formatDuration(duration))
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.5))
-                    } else if let recordedAt = recording.recordedAt {
-                        Text(recordedAt, style: .date)
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.4))
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .liquidGlass(intensity: 1.0, cornerRadius: 24, blurIntensity: .medium, opacityLevel: .content)
-            )
-            .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 4)
-        }
-        .buttonStyle(PlainButtonStyle())
+    /// `true` if the recording is currently active in the live Studio mix.
+    private func isActiveInMix(_ recording: AudioTrack) -> Bool {
+        audioManager.tracks.first(where: { $0.id == recording.id })?.isActive ?? false
     }
 
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        let totalSeconds = Int(duration)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        if hours > 0 {
-            return String(format: "%d hr, %d min", hours, minutes)
-        } else if minutes > 0 {
-            return String(format: "%d min, %d sec", minutes, seconds)
-        } else {
-            return String(format: "%d sec", seconds)
+    /// Recordings shown in the Field library are not necessarily loaded
+    /// into the AudioManager yet — they live in Supabase until the user
+    /// asks to play them. Lazy-load them on first blend so the mix gets
+    /// the audio it needs.
+    private func ensureTrackLoaded(_ recording: AudioTrack) {
+        if !audioManager.tracks.contains(where: { $0.id == recording.id }) {
+            audioManager.loadTracks(audioManager.tracks + [recording])
         }
     }
 }
+
+// `RecordingRow` (the v1 rectangular liquid-glass row) was removed in
+// Phase 2.3. The library now renders `LibraryCard`, which carries the
+// palette-extracted circular thumbnail and the drag-up-to-blend gesture.

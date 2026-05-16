@@ -51,6 +51,8 @@
 		BD000000000000000000B600 /* Forbidden.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B601 /* Forbidden.swift */; };
 		BD000000000000000000B700 /* Room.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B701 /* Room.swift */; };
 		BD000000000000000000B800 /* PageRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B801 /* PageRail.swift */; };
+		BD000000000000000000C200 /* RecordingPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C201 /* RecordingPalette.swift */; };
+		BD000000000000000000C300 /* LibraryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C301 /* LibraryCard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -125,6 +127,8 @@
 		BD000000000000000000B601 /* Forbidden.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Forbidden.swift; sourceTree = "<group>"; };
 		BD000000000000000000B701 /* Room.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Room.swift; sourceTree = "<group>"; };
 		BD000000000000000000B801 /* PageRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRail.swift; sourceTree = "<group>"; };
+		BD000000000000000000C201 /* RecordingPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPalette.swift; sourceTree = "<group>"; };
+		BD000000000000000000C301 /* LibraryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -178,6 +182,7 @@
 			children = (
 				953F37C42EEDE10E007EA25C /* EditRecordingView.swift */,
 				BD000000000000000000C101 /* RecordingsLibrarySection.swift */,
+				BD000000000000000000C301 /* LibraryCard.swift */,
 				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
 				953F37AF2EE3A705007EA25C /* RecordingView.swift */,
 				958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */,
@@ -229,6 +234,7 @@
 				BD000000000000000000B601 /* Forbidden.swift */,
 				BD000000000000000000B701 /* Room.swift */,
 				BD000000000000000000B801 /* PageRail.swift */,
+				BD000000000000000000C201 /* RecordingPalette.swift */,
 			);
 			path = Brand;
 			sourceTree = "<group>";
@@ -422,6 +428,8 @@
 				BD000000000000000000B600 /* Forbidden.swift in Sources */,
 				BD000000000000000000B700 /* Room.swift in Sources */,
 				BD000000000000000000B800 /* PageRail.swift in Sources */,
+				BD000000000000000000C200 /* RecordingPalette.swift in Sources */,
+				BD000000000000000000C300 /* LibraryCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
