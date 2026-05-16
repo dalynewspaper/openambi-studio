@@ -19,7 +19,9 @@ SELECT
 FROM pg_policies
 WHERE schemaname = 'storage' AND tablename = 'objects';
 
--- Step 3: Drop all existing policies on storage.objects for user-recordings bucket
+-- Step 3: Drop existing policies on storage.objects for user-recordings bucket
+-- IMPORTANT: Do NOT drop policies whose names contain "recording videos" —
+-- those belong to the separate `user-recording-videos` bucket (see BUCKET_VIDEO.sql).
 DO $$
 DECLARE
     r RECORD;
@@ -29,9 +31,12 @@ BEGIN
         FROM pg_policies 
         WHERE schemaname = 'storage' 
           AND tablename = 'objects'
-          AND (policyname LIKE '%user-recordings%' 
+          AND policyname NOT ILIKE '%recording videos%'
+          AND (
+               policyname LIKE '%user-recordings%' 
                OR policyname LIKE '%recording%'
-               OR policyname LIKE '%upload%')
+               OR policyname LIKE '%upload%'
+          )
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', r.policyname);
         RAISE NOTICE 'Dropped policy: %', r.policyname;

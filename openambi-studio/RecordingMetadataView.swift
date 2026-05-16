@@ -590,7 +590,10 @@ struct RecordingMetadataView: View {
         if let c = ingest.gpsCoordinate {
             return "\(String(format: "%.4f", c.latitude)), \(String(format: "%.4f", c.longitude)), \(timeStr)"
         }
-        return "Filmed \(timeStr)"
+        if let stem = ingest.sourceDisplayName, !stem.isEmpty {
+            return "\(stem) · \(timeStr)"
+        }
+        return "Imported scene · \(timeStr)"
     }
 
     // MARK: - Bare description field

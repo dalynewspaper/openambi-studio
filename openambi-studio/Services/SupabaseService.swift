@@ -25,6 +25,16 @@ class SupabaseService: ObservableObject {
         
         return request
     }
+
+    /// Storage sometimes answers 403 with `row-level security` when `user-recording-videos` policies are missing.
+    private static func videoUpload403Error(body: String) -> SupabaseError {
+        if body.localizedCaseInsensitiveContains("row-level security") {
+            return .networkError(
+                "Could not upload the background video — storage blocked it. Apply BUCKET_VIDEO.sql in Supabase (video bucket policies), or turn off “keep the picture too” to save audio only."
+            )
+        }
+        return .forbidden
+    }
     
     // MARK: - Fetch Audio Tracks
     func fetchAudioTracks() async throws -> [AudioTrack] {
@@ -609,7 +619,7 @@ class SupabaseService: ObservableObject {
             } else if httpResponse.statusCode == 401 {
                 throw SupabaseError.unauthorized
             } else if httpResponse.statusCode == 403 {
-                throw SupabaseError.forbidden
+                throw Self.videoUpload403Error(body: errorMessage)
             } else {
                 throw SupabaseError.networkError("video upload failed: \(errorMessage)")
             }

@@ -29,6 +29,8 @@ struct IngestedVideo: Identifiable {
     let gpsCoordinate: CLLocationCoordinate2D?
     /// Reverse-geocoded street-style line for titles / `location_name` (e.g. `Auguststraße 46`).
     let geocodedPlaceTitle: String?
+    /// Readable fragment from the original file name (Photos / Files), when it isn’t a bare UUID.
+    let sourceDisplayName: String?
 }
 
 /// Prepared import: full copy + metadata, **before** we trim to the user's
@@ -43,6 +45,7 @@ struct PendingVideoImport: Identifiable {
     let captureDate: Date?
     let gpsCoordinate: CLLocationCoordinate2D?
     let geocodedPlaceTitle: String?
+    let sourceDisplayName: String?
 
     /// Exported loop length (seconds of audio + video we ship).
     static let loopExportSeconds: TimeInterval = 90
@@ -166,6 +169,7 @@ final class VideoIngest {
         }
 
         let ext = copiedSource.pathExtension.lowercased().isEmpty ? "mp4" : copiedSource.pathExtension.lowercased()
+        let sourceDisplayName = Self.sourceDisplayName(from: sourceURL)
 
         return PendingVideoImport(
             id: id,
@@ -176,7 +180,8 @@ final class VideoIngest {
             videoBytes: videoBytes,
             captureDate: captureDate,
             gpsCoordinate: gpsCoordinate,
-            geocodedPlaceTitle: geocodedPlaceTitle
+            geocodedPlaceTitle: geocodedPlaceTitle,
+            sourceDisplayName: sourceDisplayName
         )
     }
 
@@ -242,7 +247,8 @@ final class VideoIngest {
             thumbnail: thumbnail,
             captureDate: pending.captureDate,
             gpsCoordinate: pending.gpsCoordinate,
-            geocodedPlaceTitle: pending.geocodedPlaceTitle
+            geocodedPlaceTitle: pending.geocodedPlaceTitle,
+            sourceDisplayName: pending.sourceDisplayName
         )
     }
 
@@ -314,6 +320,21 @@ final class VideoIngest {
 
     private func cleanupDir(_ dir: URL) {
         try? FileManager.default.removeItem(at: dir)
+    }
+
+    /// Best-effort readable label from the picker URL’s file name (not the internal ingest UUID copy).
+    static func sourceDisplayName(from url: URL) -> String? {
+        let base = url.deletingPathExtension().lastPathComponent
+        let trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return nil }
+        if UUID(uuidString: trimmed) != nil { return nil }
+        var readable = trimmed.replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+        while readable.contains("  ") {
+            readable = readable.replacingOccurrences(of: "  ", with: " ")
+        }
+        readable = String(readable.prefix(80)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return readable.isEmpty ? nil : readable
     }
 
     // MARK: - Audio extraction
