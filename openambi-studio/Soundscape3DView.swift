@@ -266,7 +266,12 @@ struct Soundscape3DView: View {
                     .zIndex(100) // Entire dock container above grid
                 }
                 
-                // Modal overlay - shown when track is selected from grid
+                // Modal overlay (Phase 3.4) — opens like an aperture
+                // dilating from the orb. The .scale(0.86, anchor: .center)
+                // + opacity pair, paired with the spring already running
+                // on selection/dismissal, makes the sheet feel like the
+                // grid orb itself is unfurling rather than a panel
+                // arriving from another surface.
                 if let track = selectedTrackForModal {
                     SoundControlModal(
                         track: track,
@@ -278,7 +283,10 @@ struct Soundscape3DView: View {
                             }
                         }
                     )
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(
+                        .scale(scale: 0.86, anchor: .center)
+                            .combined(with: .opacity)
+                    )
                 }
             }
         }
@@ -2008,96 +2016,84 @@ struct SoundControlModal: View {
     @ViewBuilder
     private func modalContent(track: AudioTrack) -> some View {
         let trackColor = SoundColor.colorForTrack(track.name)
-        
+
         // CRITICAL: Compute display volume once at function level
         // Use actual track volume when not dragging, currentVolume when dragging
         let displayVolume = isDraggingSlider ? currentVolume : (currentTrack?.volume ?? currentVolume)
-        
+
         return VStack(spacing: AppSpacing.xl) {
-            // Header: Icon and name
+            // Aperture (Phase 3.4) — the long-press modal opens like
+            // the orb itself dilating. The header is a single round
+            // 'aperture' with the track's RecordingPalette burning at
+            // the centre; the icon sits inside it like the orb did on
+            // the grid. This is the visual continuity cue: 'this sheet
+            // *is* that orb you just held'.
             VStack(spacing: AppSpacing.md) {
-                // Icon with Liquid Glass
                 ZStack {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.thinMaterial)
-                                .opacity(0.3)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            trackColor.opacity(0.7),
-                                            trackColor.opacity(0.4),
-                                            trackColor.opacity(0.3),
-                                            trackColor.opacity(0.4),
-                                            trackColor.opacity(0.7)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 2.5
-                                )
-                        )
-                        .frame(width: 80, height: 80)
-                        .shadow(color: trackColor.opacity(0.4), radius: 16, x: 0, y: 6)
-                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 3)
-                    
-                    Image(systemName: track.icon)
-                        .font(.system(size: 36, weight: .semibold, design: .rounded))
-                        .foregroundStyle(
+                    Circle()
+                        .fill(RecordingPalette.gradient(for: track))
+                    Circle()
+                        .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.95),
-                                    Color.white.opacity(0.85)
+                                    trackColor.opacity(0.55),
+                                    trackColor.opacity(0.18)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
-                            )
+                            ),
+                            lineWidth: 1.0
                         )
+
+                    Image(systemName: track.icon)
+                        .font(.system(size: 38, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
                 }
-                
-                VStack(spacing: AppSpacing.xs) {
+                .frame(width: 96, height: 96)
+                .shadow(color: trackColor.opacity(0.45), radius: 22, x: 0, y: 8)
+                .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 4)
+
+                VStack(spacing: 2) {
                     Text(track.name)
-                        .font(.system(size: AppTypography.h2, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(AuroraTypography.editorial(22, weight: .semibold))
+                        .foregroundColor(AuroraColors.TextOnAurora.primary)
                         .lineLimit(1)
-                    
-                    Text("Active Sound")
-                        .font(.system(size: AppTypography.caption, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.6))
+
+                    Text("In the mix")
+                        .font(AuroraTypography.editorial(11, weight: .medium))
+                        .kerning(2.4)
+                        .textCase(.uppercase)
+                        .foregroundColor(AuroraColors.TextOnAurora.tertiary)
                 }
             }
-            
-            // Volume control
+
+            // Volume row — Aurora typography + chromatic-edge percentage
+            // chip. The chip's stroke picks up the live track color so
+            // the modal reads as 'tuned to this sound'.
             VStack(spacing: AppSpacing.md) {
                 HStack {
                     Text("Volume")
-                        .font(.system(size: AppTypography.body, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.9))
-                    
+                        .font(AuroraTypography.editorial(13, weight: .semibold))
+                        .foregroundColor(AuroraColors.TextOnAurora.secondary)
+
                     Spacer()
-                    
-                    // Use computed displayVolume
+
                     Text("\(Int(displayVolume * 100))%")
-                        .font(.system(size: AppTypography.body, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .font(AuroraTypography.mono(15, weight: .semibold))
+                        .foregroundColor(AuroraColors.TextOnAurora.primary)
                         .padding(.horizontal, AppSpacing.sm)
-                        .padding(.vertical, AppSpacing.xs)
+                        .padding(.vertical, 4)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            Capsule()
                                 .fill(.ultraThinMaterial)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(trackColor.opacity(0.3), lineWidth: 1.5)
+                                    Capsule()
+                                        .strokeBorder(trackColor.opacity(0.45), lineWidth: 1)
                                 )
                         )
                 }
-                
-                // Volume slider - isolated gesture (passes displayVolume)
+
                 volumeSlider(trackColor: trackColor, displayVolume: displayVolume)
             }
             
@@ -2135,39 +2131,55 @@ struct SoundControlModal: View {
                 }
             }) {
                 HStack(spacing: AppSpacing.sm) {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                    Text("Remove from Mix")
-                        .font(.system(size: AppTypography.body, weight: .semibold, design: .rounded))
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 17, weight: .medium))
+                    Text("Take it out")
+                        .font(AuroraTypography.editorial(15, weight: .medium))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(AuroraColors.TextOnAurora.secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppSpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    Capsule()
                         .fill(.ultraThinMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1.5)
+                            Capsule()
+                                .strokeBorder(AuroraColors.Stroke.edge, lineWidth: 1)
                         )
                 )
             }
             .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel("Remove \(track.name) from the mix")
         }
         .padding(.vertical, AppSpacing.xl)
         .padding(.horizontal, AppSpacing.lg)
         .frame(maxWidth: 340)
         .fixedSize(horizontal: false, vertical: true)
-        .liquidGlass(intensity: 1.0, cornerRadius: 24, blurIntensity: .medium, opacityLevel: .content)
+        // Aperture chrome (Phase 3.4). Replaces the v1 .liquidGlass card
+        // with the Aurora canvas vocabulary + a track-tinted hairline so
+        // the sheet reads as part of the same brand surface as the rest
+        // of the redesign and clearly carries the active sound's color.
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(trackColor.opacity(0.30), lineWidth: 1)
+        }
+        .auroraGlass(.canvas, cornerRadius: 28)
+        .shadow(color: .black.opacity(0.32), radius: 30, x: 0, y: 14)
     }
     
     @ViewBuilder
     private func volumeSlider(trackColor: Color, displayVolume: Double) -> some View {
         return GeometryReader { geometry in
             ZStack(alignment: .leading) {
-                // Track background - gesture target
+                // Aurora rail (Phase 3.4). The slider rail picks up the
+                // standard Aurora hairline so it reads consistently with
+                // the rest of the modal chrome.
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(0.15))
+                    .fill(Color.white.opacity(0.10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(AuroraColors.Stroke.edge, lineWidth: 0.5)
+                    )
                     .frame(height: 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
