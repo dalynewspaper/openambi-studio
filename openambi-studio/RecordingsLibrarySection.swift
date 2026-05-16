@@ -178,15 +178,15 @@ struct RecordingsLibrarySection: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Skeleton stack — the user sees the *shape* of the library forming.
     private var loadingPlaceholder: some View {
         VStack(spacing: 14) {
-            ProgressView().tint(AuroraColors.TextOnAurora.secondary)
-            Text("Listening for your library…")
-                .font(AuroraTypography.ui(13))
-                .foregroundColor(AuroraColors.TextOnAurora.tertiary)
+            ForEach(0..<3, id: \.self) { _ in
+                LibraryCardSkeleton()
+            }
         }
-        .padding(.vertical, 40)
-        .frame(maxWidth: .infinity)
+        .accessibilityElement()
+        .accessibilityLabel("Loading your library")
     }
 
     private var emptyPlaceholder: some View {

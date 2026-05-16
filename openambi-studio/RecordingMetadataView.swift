@@ -127,35 +127,13 @@ struct RecordingMetadataView: View {
                 ZStack {
                     Color.black.opacity(0.6)
                         .ignoresSafeArea()
-                    
-                    VStack(spacing: 24) {
-                        // Animated progress indicator
-                        ProgressView()
-                            .scaleEffect(1.5)
-                            .tint(.white)
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        
-                        // Status message
-                        VStack(spacing: 8) {
-                            Text(saveStatusMessage)
-                                .foregroundColor(.white)
-                                .font(.system(size: 18, weight: .semibold))
-                                .multilineTextAlignment(.center)
-                            
-                            if isSavingToLibrary {
-                                Text("This may take a few seconds...")
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .font(.system(size: 14, weight: .regular))
-                            }
-                        }
-                    }
-                    .padding(40)
-                    .background(
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(.ultraThinMaterial)
-                            .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+
+                    AuroraLoader.Modal(
+                        title: saveStatusMessage,
+                        subtitle: isSavingToLibrary
+                            ? "This may take a few seconds…"
+                            : nil
                     )
-                    .padding(.horizontal, 40)
                 }
             }
         }

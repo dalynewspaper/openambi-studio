@@ -53,6 +53,8 @@
 		BD000000000000000000B800 /* PageRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B801 /* PageRail.swift */; };
 		BD000000000000000000C200 /* RecordingPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C201 /* RecordingPalette.swift */; };
 		BD000000000000000000C300 /* LibraryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C301 /* LibraryCard.swift */; };
+		BD000000000000000000C400 /* AuroraLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C401 /* AuroraLoader.swift */; };
+		BD000000000000000000C500 /* LibraryCardSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C501 /* LibraryCardSkeleton.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -129,6 +131,8 @@
 		BD000000000000000000B801 /* PageRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRail.swift; sourceTree = "<group>"; };
 		BD000000000000000000C201 /* RecordingPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPalette.swift; sourceTree = "<group>"; };
 		BD000000000000000000C301 /* LibraryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCard.swift; sourceTree = "<group>"; };
+		BD000000000000000000C401 /* AuroraLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuroraLoader.swift; sourceTree = "<group>"; };
+		BD000000000000000000C501 /* LibraryCardSkeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCardSkeleton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -183,6 +187,7 @@
 				953F37C42EEDE10E007EA25C /* EditRecordingView.swift */,
 				BD000000000000000000C101 /* RecordingsLibrarySection.swift */,
 				BD000000000000000000C301 /* LibraryCard.swift */,
+				BD000000000000000000C501 /* LibraryCardSkeleton.swift */,
 				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
 				953F37AF2EE3A705007EA25C /* RecordingView.swift */,
 				958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */,
@@ -235,6 +240,7 @@
 				BD000000000000000000B701 /* Room.swift */,
 				BD000000000000000000B801 /* PageRail.swift */,
 				BD000000000000000000C201 /* RecordingPalette.swift */,
+				BD000000000000000000C401 /* AuroraLoader.swift */,
 			);
 			path = Brand;
 			sourceTree = "<group>";
@@ -430,6 +436,8 @@
 				BD000000000000000000B800 /* PageRail.swift in Sources */,
 				BD000000000000000000C200 /* RecordingPalette.swift in Sources */,
 				BD000000000000000000C300 /* LibraryCard.swift in Sources */,
+				BD000000000000000000C400 /* AuroraLoader.swift in Sources */,
+				BD000000000000000000C500 /* LibraryCardSkeleton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
