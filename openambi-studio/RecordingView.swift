@@ -95,41 +95,45 @@ struct RecordingView: View {
 
     // MARK: - Capture section
 
+    /// The new capture orb (Phase 2.5). The waveform breathes around the
+    /// record button so the orb itself becomes the visualization. The
+    /// editorial header sits above the orb; the timer hangs just under
+    /// it, and the status / hint sit at the bottom of the section.
     private var captureSection: some View {
-        VStack(spacing: 40) {
-            HStack {
-                Spacer()
-                Text("Record Sound")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
-                Spacer()
+        VStack(spacing: 28) {
+            VStack(spacing: 6) {
+                Text("Field")
+                    .font(AuroraTypography.editorial(12, weight: .medium))
+                    .kerning(2.4)
+                    .textCase(.uppercase)
+                    .foregroundColor(AuroraColors.TextOnAurora.tertiary)
+
+                Text(captureHeadline)
+                    .font(AuroraTypography.display(28, weight: .semibold))
+                    .foregroundColor(AuroraColors.TextOnAurora.primary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
             }
-            .padding(.horizontal, 20)
             .padding(.top, 10)
 
             Spacer(minLength: 0)
 
-            VStack(spacing: 30) {
-                LevelMeterView(level: recordingManager.audioLevel)
-                    .frame(height: 200)
+            ZStack {
+                CircularWaveformView(
+                    level: recordingManager.audioLevel,
+                    isRecording: isCurrentlyRecording
+                )
 
-                Text(recordingManager.formatDuration(recordingManager.recordingDuration))
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .monospacedDigit()
-
-                statusText
-            }
-
-            Spacer(minLength: 0)
-
-            VStack(spacing: 20) {
                 Button(action: handleRecordButtonTap) {
                     ZStack {
                         Circle()
                             .fill(buttonColor)
-                            .frame(width: 80, height: 80)
-                            .shadow(color: buttonColor.opacity(0.5), radius: 20, x: 0, y: 0)
+                            .frame(width: 84, height: 84)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(Color.white.opacity(0.4), lineWidth: 1)
+                            )
+                            .shadow(color: buttonColor.opacity(0.65), radius: 24, x: 0, y: 0)
 
                         Image(systemName: buttonIcon)
                             .font(.system(size: 32, weight: .semibold))
@@ -137,13 +141,42 @@ struct RecordingView: View {
                     }
                 }
                 .disabled(recordingManager.recordingState == .processing)
-
-                Text(buttonHintText)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                .accessibilityLabel(buttonHintText)
             }
-            .padding(.bottom, 30)
+            .frame(height: 290)
+
+            Text(recordingManager.formatDuration(recordingManager.recordingDuration))
+                .font(AuroraTypography.mono(42, weight: .semibold))
+                .foregroundColor(AuroraColors.TextOnAurora.primary)
+                .monospacedDigit()
+                .accessibilityLabel("Recording length \(recordingManager.formatDuration(recordingManager.recordingDuration))")
+
+            statusText
+
+            Spacer(minLength: 0)
+
+            Text(buttonHintText)
+                .font(AuroraTypography.ui(13, weight: .medium))
+                .foregroundColor(AuroraColors.TextOnAurora.tertiary)
+                .padding(.bottom, 24)
         }
+    }
+
+    /// Single-line headline that adapts to recording state.
+    private var captureHeadline: String {
+        switch recordingManager.recordingState {
+        case .recording: return "Listening to this room"
+        case .processing: return "Saving the moment"
+        case .completed: return "That's a take"
+        case .paused: return "Held"
+        case .error: return "Something interrupted us"
+        case .idle: return "Capture this place"
+        }
+    }
+
+    private var isCurrentlyRecording: Bool {
+        if case .recording = recordingManager.recordingState { return true }
+        return false
     }
 
     // MARK: - Computed Properties
@@ -152,31 +185,27 @@ struct RecordingView: View {
         Group {
             switch recordingManager.recordingState {
             case .idle:
-                Text("Tap to start recording")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                statusLine("Tap to start", color: AuroraColors.TextOnAurora.secondary)
             case .recording:
-                Text("Recording...")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.red.opacity(0.9))
+                statusLine("Recording", color: Color(red: 1.0, green: 0.38, blue: 0.42).opacity(0.95))
             case .processing:
-                Text("Processing...")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                statusLine("Saving…", color: AuroraColors.TextOnAurora.secondary)
             case .completed:
-                Text("Recording complete")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.green.opacity(0.9))
+                statusLine("Captured", color: Color(red: 0.45, green: 0.85, blue: 0.55))
             case .error(let message):
-                Text(message)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.red.opacity(0.9))
+                statusLine(message, color: Color(red: 1.0, green: 0.38, blue: 0.42).opacity(0.95))
             case .paused:
-                Text("Paused")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                statusLine("Paused", color: AuroraColors.TextOnAurora.secondary)
             }
         }
+    }
+
+    private func statusLine(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(AuroraTypography.editorial(15, weight: .medium))
+            .kerning(1.4)
+            .textCase(.uppercase)
+            .foregroundColor(color)
     }
 
     private var buttonColor: Color {
@@ -199,12 +228,9 @@ struct RecordingView: View {
 
     private var buttonHintText: String {
         switch recordingManager.recordingState {
-        case .recording:
-            return "Tap to stop recording"
-        case .processing:
-            return "Processing your recording..."
-        default:
-            return "Tap to start recording"
+        case .recording: return "Tap the orb to stop"
+        case .processing: return "Holding the take…"
+        default: return "Tap the orb to begin"
         }
     }
 
@@ -237,55 +263,8 @@ struct RecordingView: View {
     }
 }
 
-// MARK: - Level Meter View
-struct LevelMeterView: View {
-    let level: Double // 0.0 to 1.0
-
-    var body: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 4) {
-                ForEach(0..<30, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(barColor(for: index))
-                        .frame(width: (geometry.size.width - 116) / 30, height: barHeight(for: index))
-                        .animation(.spring(response: 0.1, dampingFraction: 0.6), value: level)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func barHeight(for index: Int) -> CGFloat {
-        let threshold = Double(index) / 30.0
-        let normalizedLevel = level
-
-        if normalizedLevel >= threshold {
-            let excess = normalizedLevel - threshold
-            let maxHeight: CGFloat = 200
-            let minHeight: CGFloat = 8
-            let baseHeight = minHeight + (CGFloat(index) / 30.0) * (maxHeight - minHeight)
-            let extraHeight = excess * 20
-            return min(baseHeight + extraHeight, maxHeight)
-        } else {
-            return 8
-        }
-    }
-
-    private func barColor(for index: Int) -> Color {
-        let threshold = Double(index) / 30.0
-        if level >= threshold {
-            if index < 20 {
-                return .green
-            } else if index < 26 {
-                return .yellow
-            } else {
-                return .red
-            }
-        } else {
-            return .white.opacity(0.2)
-        }
-    }
-}
+// LevelMeterView (the v1 horizontal bar meter) was removed in Phase 2.5;
+// the capture orb now renders its own CircularWaveformView.
 
 // MARK: - Preview
 #Preview {
