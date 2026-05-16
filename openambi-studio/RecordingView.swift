@@ -50,7 +50,13 @@ struct RecordingView: View {
 
                         RecordingsLibrarySection()
                     }
-                    .padding(.top, geo.safeAreaInsets.top)
+                    // ContentView ignores safe area so the scene wash bleeds
+                    // full-bleed; that flattens this GeometryReader's top
+                    // inset to 0 and pulls the FieldHeader into the status
+                    // bar / Dynamic Island. Read the window's real inset as
+                    // a fallback so the header always lands beneath device
+                    // chrome regardless of ancestor safe-area treatment.
+                    .padding(.top, max(geo.safeAreaInsets.top, WindowMetrics.topInset))
                 }
             }
         }

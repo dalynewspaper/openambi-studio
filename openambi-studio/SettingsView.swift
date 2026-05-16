@@ -33,6 +33,13 @@ struct SettingsView: View {
                 .allowsHitTesting(false)
 
             GeometryReader { geometry in
+                // ContentView's TabView children all ignore safe area so the
+                // background washes can bleed full bleed. The side-effect is
+                // that this GeometryReader sees `safeAreaInsets == .zero`,
+                // which would smash the AtelierHeader straight into the
+                // Dynamic Island. Recover the device's true top inset from
+                // the window when SwiftUI's value collapses to zero.
+                let topInset = max(geometry.safeAreaInsets.top, WindowMetrics.topInset)
                 ScrollView {
                     VStack(spacing: 0) {
                         // Editorial Atelier header sits where the iOS-
@@ -42,7 +49,7 @@ struct SettingsView: View {
                         // tell that this is still iOS Settings under
                         // the hood.
                         Spacer()
-                            .frame(height: geometry.safeAreaInsets.top + AppSpacing.sm)
+                            .frame(height: topInset + AppSpacing.sm)
 
                         AtelierHeader(isAuthenticated: authManager.isAuthenticated)
                             .padding(.bottom, AppSpacing.lg)

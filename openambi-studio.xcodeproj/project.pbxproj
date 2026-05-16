@@ -48,6 +48,7 @@
 		BD000000000000000000B300 /* AuroraTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B301 /* AuroraTokens.swift */; };
 		BD000000000000000000B400 /* InstrumentFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B401 /* InstrumentFeedback.swift */; };
 		BD000000000000000000B500 /* AmbientFeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B501 /* AmbientFeatureFlags.swift */; };
+		BD000000000000000000E100 /* WindowMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000E101 /* WindowMetrics.swift */; };
 		BD000000000000000000B600 /* Forbidden.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B601 /* Forbidden.swift */; };
 		BD000000000000000000B700 /* Room.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B701 /* Room.swift */; };
 		BD000000000000000000B800 /* PageRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B801 /* PageRail.swift */; };
@@ -133,6 +134,7 @@
 		BD000000000000000000B301 /* AuroraTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuroraTokens.swift; sourceTree = "<group>"; };
 		BD000000000000000000B401 /* InstrumentFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentFeedback.swift; sourceTree = "<group>"; };
 		BD000000000000000000B501 /* AmbientFeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientFeatureFlags.swift; sourceTree = "<group>"; };
+		BD000000000000000000E101 /* WindowMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowMetrics.swift; sourceTree = "<group>"; };
 		BD000000000000000000B601 /* Forbidden.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Forbidden.swift; sourceTree = "<group>"; };
 		BD000000000000000000B701 /* Room.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Room.swift; sourceTree = "<group>"; };
 		BD000000000000000000B801 /* PageRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRail.swift; sourceTree = "<group>"; };
@@ -281,6 +283,7 @@
 				S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */,
 				BD000000000000000000B401 /* InstrumentFeedback.swift */,
 				BD000000000000000000B501 /* AmbientFeatureFlags.swift */,
+				BD000000000000000000E101 /* WindowMetrics.swift */,
 				BD000000000000000000C701 /* PlaceObserver.swift */,
 			);
 			path = Services;
@@ -452,6 +455,7 @@
 				BD000000000000000000B300 /* AuroraTokens.swift in Sources */,
 				BD000000000000000000B400 /* InstrumentFeedback.swift in Sources */,
 				BD000000000000000000B500 /* AmbientFeatureFlags.swift in Sources */,
+				BD000000000000000000E100 /* WindowMetrics.swift in Sources */,
 				BD000000000000000000B600 /* Forbidden.swift in Sources */,
 				BD000000000000000000B700 /* Room.swift in Sources */,
 				BD000000000000000000B800 /* PageRail.swift in Sources */,

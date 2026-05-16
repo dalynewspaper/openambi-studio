@@ -55,8 +55,14 @@ struct Soundscape3DView: View {
     var body: some View {
         GeometryReader { geometry in
             let safeAreaInsets = geometry.safeAreaInsets
-            let topSafeArea = safeAreaInsets.top
-            let bottomSafeArea = safeAreaInsets.bottom
+            // ContentView (and the TabView children) call .ignoresSafeArea(.all)
+            // to let AuroraGlass washes bleed edge-to-edge. As a side effect the
+            // GeometryReader here reports zero insets, which would crash the
+            // StudioHeader into the Dynamic Island. Fall back to the window's
+            // real insets in that case so the editorial header always sits
+            // beneath the device chrome.
+            let topSafeArea = max(safeAreaInsets.top, WindowMetrics.topInset)
+            let bottomSafeArea = max(safeAreaInsets.bottom, WindowMetrics.bottomInset)
             // Enhanced safe area handling with additional padding for premium feel
             let effectiveTopSafeArea = topSafeArea + AppSpacing.safeAreaTopPadding
             let effectiveBottomSafeArea = bottomSafeArea + AppSpacing.safeAreaBottomPadding
@@ -146,12 +152,20 @@ struct Soundscape3DView: View {
                 
                 // Grid layout for all sound elements (active tracks first) - hide when modal is open
                 if selectedTrackForModal == nil {
+                    // When there are active tracks the master volume slider sits
+                    // between the header and the grid. The slider's tap-target
+                    // is 44pt and we want a calm 16pt of breathing space below
+                    // it before the first row of orbs starts — otherwise the
+                    // slider's rail draws straight through the top row of
+                    // tiles (the bug visible in the launch screenshots).
+                    let sliderClearance: CGFloat = activeTracks.isEmpty ? 0 : (44 + AppSpacing.sm)
+
                     ScrollView {
                         VStack(spacing: 0) {
                             // Top spacing - drop icons down for better visual balance
                             // Add 48px total margin (24px + 24px) to push elements into the app
                             Spacer()
-                                .frame(height: effectiveTopSafeArea + AppSpacing.xl + AppSpacing.md + AppSpacing.md)
+                                .frame(height: effectiveTopSafeArea + AppSpacing.xl + AppSpacing.md + AppSpacing.md + sliderClearance)
                             
                             // Sound elements grid - iOS home screen style spacing
                             LazyVGrid(

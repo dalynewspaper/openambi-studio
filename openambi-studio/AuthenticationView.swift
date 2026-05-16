@@ -107,7 +107,17 @@ struct AuthenticationView: View {
                     case .notHandled:
                         authManager.errorMessage = "Sign in with Apple is not available on this device."
                     case .unknown:
-                        authManager.errorMessage = "An unknown error occurred. Please try again."
+                        // The `unknown` code is what the Authentication Services
+                        // framework throws when it can't reach Apple ID — on a
+                        // simulator this almost always means there's no iCloud
+                        // account signed into the sim itself. Disambiguating
+                        // the copy here saves a confused round-trip during
+                        // local development and beta testing.
+                        #if targetEnvironment(simulator)
+                        authManager.errorMessage = "Sign in with Apple needs an iCloud account on this simulator. Open the simulator's Settings app and sign in to iCloud first — or run on a real device."
+                        #else
+                        authManager.errorMessage = "Sign in with Apple couldn't reach Apple ID. Check your connection and try again."
+                        #endif
                     @unknown default:
                         authManager.errorMessage = "Authentication error. Please try again."
                     }
