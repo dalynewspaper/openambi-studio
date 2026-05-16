@@ -56,6 +56,8 @@
 		BD000000000000000000C400 /* AuroraLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C401 /* AuroraLoader.swift */; };
 		BD000000000000000000C500 /* LibraryCardSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C501 /* LibraryCardSkeleton.swift */; };
 		BD000000000000000000C600 /* CircularWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C601 /* CircularWaveformView.swift */; };
+		BD000000000000000000C700 /* PlaceObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C701 /* PlaceObserver.swift */; };
+		BD000000000000000000C800 /* PlaceChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000C801 /* PlaceChip.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -135,6 +137,8 @@
 		BD000000000000000000C401 /* AuroraLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuroraLoader.swift; sourceTree = "<group>"; };
 		BD000000000000000000C501 /* LibraryCardSkeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCardSkeleton.swift; sourceTree = "<group>"; };
 		BD000000000000000000C601 /* CircularWaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularWaveformView.swift; sourceTree = "<group>"; };
+		BD000000000000000000C701 /* PlaceObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceObserver.swift; sourceTree = "<group>"; };
+		BD000000000000000000C801 /* PlaceChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceChip.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -191,6 +195,7 @@
 				BD000000000000000000C301 /* LibraryCard.swift */,
 				BD000000000000000000C501 /* LibraryCardSkeleton.swift */,
 				BD000000000000000000C601 /* CircularWaveformView.swift */,
+				BD000000000000000000C801 /* PlaceChip.swift */,
 				953F37AE2EE3A705007EA25C /* RecordingMetadataView.swift */,
 				953F37AF2EE3A705007EA25C /* RecordingView.swift */,
 				958B1D172EDB2BB10068BC35 /* openambi-studio.entitlements */,
@@ -264,6 +269,7 @@
 				S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */,
 				BD000000000000000000B401 /* InstrumentFeedback.swift */,
 				BD000000000000000000B501 /* AmbientFeatureFlags.swift */,
+				BD000000000000000000C701 /* PlaceObserver.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -442,6 +448,8 @@
 				BD000000000000000000C400 /* AuroraLoader.swift in Sources */,
 				BD000000000000000000C500 /* LibraryCardSkeleton.swift in Sources */,
 				BD000000000000000000C600 /* CircularWaveformView.swift in Sources */,
+				BD000000000000000000C700 /* PlaceObserver.swift in Sources */,
+				BD000000000000000000C800 /* PlaceChip.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -101,6 +101,9 @@ struct RecordingView: View {
     /// it, and the status / hint sit at the bottom of the section.
     private var captureSection: some View {
         VStack(spacing: 28) {
+            PlaceChip()
+                .padding(.top, 8)
+
             VStack(spacing: 6) {
                 Text("Field")
                     .font(AuroraTypography.editorial(12, weight: .medium))
@@ -114,7 +117,6 @@ struct RecordingView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
-            .padding(.top, 10)
 
             Spacer(minLength: 0)
 
