@@ -75,9 +75,10 @@ struct SettingsView: View {
                                 accountSection
                             }
                             aboutSection
+                            colophon
                         }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 32)
+                        .padding(.bottom, AppSpacing.xxl)
                     }
                 }
             }
@@ -355,6 +356,33 @@ struct SettingsView: View {
         Image(systemName: "chevron.right")
             .font(.system(size: 13, weight: .medium))
             .foregroundColor(AuroraColors.IconOnAurora.inactive)
+    }
+
+    /// Brand colophon at the very bottom of the Atelier (Phase 4.4).
+    ///
+    /// The room ends like a book or magazine: a small mark, a version
+    /// line, a quiet attribution. Centered, no chrome — just the
+    /// BrandLockup at .display + a tertiary editorial caption with the
+    /// app version and the design epoch.
+    ///
+    /// Functionally this also closes a UX gap from the v1 — the version
+    /// number used to live mid-About list, formatted as if it were a
+    /// settings row. Now it's where it belongs: as part of the colophon.
+    private var colophon: some View {
+        VStack(spacing: 12) {
+            BrandLockup(layout: .vertical, size: .display, tint: AuroraColors.TextOnAurora.tertiary)
+
+            Text("openambi 1.0 · openambi 2.0 design")
+                .font(AuroraTypography.editorial(11, weight: .medium))
+                .kerning(2.4)
+                .textCase(.uppercase)
+                .foregroundColor(AuroraColors.TextOnAurora.quaternary)
+        }
+        .padding(.top, AppSpacing.xl)
+        .padding(.bottom, AppSpacing.lg)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("openambi version 1.0, openambi 2.0 design")
     }
 }
 
