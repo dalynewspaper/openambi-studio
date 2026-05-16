@@ -306,48 +306,56 @@ class AudioManager: ObservableObject {
             }
         }
         
-        // Add status observer for player item
+        // Add status observer for player item. KVO callbacks fire on whichever
+        // thread mutated the property; we bounce to MainActor before touching
+        // retryCounts / audioPlayers / playerLooper to keep all writes on the
+        // same isolation domain as the rest of the preload pipeline.
         let trackIdForObserver = track.id
         let trackNameForObserver = track.name
         let trackToRetryForObserver = track
         let statusObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
-            guard let self = self else { return }
-            switch item.status {
-            case .readyToPlay:
-                print("✅ \(trackNameForObserver) player item ready")
-                self.retryCounts[trackIdForObserver] = 0 // Reset on success
-            case .failed:
-                let error = item.error?.localizedDescription ?? "Unknown error"
-                print("❌ \(trackNameForObserver) player item failed: \(error)")
-                let currentRetries = self.retryCounts[trackIdForObserver] ?? 0
-                if currentRetries < self.maxRetries {
-                    self.retryCounts[trackIdForObserver] = currentRetries + 1
-                    let delay = Double(currentRetries + 1) * 1.0
-                    print("🔄 Retrying \(trackNameForObserver) in \(delay)s (attempt \(currentRetries + 1)/\(self.maxRetries))")
-                    let trackId = trackIdForObserver
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                        guard let self = self else { return }
-                        // Clean up failed player
-                        self.audioPlayers[trackId]?.pause()
-                        self.audioPlayers.removeValue(forKey: trackId)
-                        self.playerLooper[trackId]?.disableLooping()
-                        self.playerLooper.removeValue(forKey: trackId)
-                        Task { @MainActor in
-                            await self.preloadTrackImmediately(trackToRetryForObserver)
+            let status = item.status
+            let errorDescription = item.error?.localizedDescription
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch status {
+                case .readyToPlay:
+                    print("✅ \(trackNameForObserver) player item ready")
+                    self.retryCounts[trackIdForObserver] = 0 // Reset on success
+                case .failed:
+                    let error = errorDescription ?? "Unknown error"
+                    print("❌ \(trackNameForObserver) player item failed: \(error)")
+                    let currentRetries = self.retryCounts[trackIdForObserver] ?? 0
+                    if currentRetries < self.maxRetries {
+                        self.retryCounts[trackIdForObserver] = currentRetries + 1
+                        let delay = Double(currentRetries + 1) * 1.0
+                        print("🔄 Retrying \(trackNameForObserver) in \(delay)s (attempt \(currentRetries + 1)/\(self.maxRetries))")
+                        let trackId = trackIdForObserver
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                            guard let self = self else { return }
+                            self.audioPlayers[trackId]?.pause()
+                            self.audioPlayers.removeValue(forKey: trackId)
+                            self.playerLooper[trackId]?.disableLooping()
+                            self.playerLooper.removeValue(forKey: trackId)
+                            Task { @MainActor in
+                                await self.preloadTrackImmediately(trackToRetryForObserver)
+                            }
                         }
+                    } else {
+                        print("❌ \(trackNameForObserver) failed after \(self.maxRetries) retries")
                     }
-                } else {
-                    print("❌ \(trackNameForObserver) failed after \(self.maxRetries) retries")
+                case .unknown:
+                    print("⚠️ \(trackNameForObserver) player item status unknown")
+                @unknown default:
+                    break
                 }
-            case .unknown:
-                print("⚠️ \(trackNameForObserver) player item status unknown")
-            @unknown default:
-                break
             }
         }
         
-        // Store observer
+        // MainActor-isolated store. Invalidate any stale observer first so that
+        // a re-preload for the same track doesn't leak its prior KVO subscription.
         await MainActor.run {
+            statusObservers[track.id]?.invalidate()
             statusObservers[track.id] = statusObserver
         }
         
@@ -446,7 +454,15 @@ class AudioManager: ObservableObject {
         // Ensure audio session is set up before loading tracks
         setupAudioSession()
         
-        Task {
+        // Isolation contract (Phase 4 audio fix): the preload pipeline writes
+        // into per-track dictionaries (audioPlayers / playerLooper /
+        // statusObservers / retryCounts) that SwiftUI also observes. Swift's
+        // Dictionary is not thread-safe, so every mutation has to land on the
+        // same domain — @MainActor. Pinning the Task here keeps two concurrent
+        // preloads (e.g. one from the room's background warm-up, one from a
+        // user tap) from racing on the same Dictionary buffer and corrupting
+        // its storage mid-write.
+        Task { @MainActor in
             // Check cache first
             let finalURL: URL
             
@@ -497,54 +513,58 @@ class AudioManager: ObservableObject {
                 }
             }
             
-            // Add status observer with retry logic
+            // Add status observer with retry logic. KVO fires on whichever
+            // thread mutated the property (AVFoundation makes no guarantees),
+            // so the callback bounces to MainActor before touching any of the
+            // shared per-track dictionaries.
             let statusObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
-                guard let self = self else { return }
-                
-                switch item.status {
-                case .readyToPlay:
-                    print("✅ \(track.name) player item is ready to play")
-                    // Reset retry count on success
-                    self.retryCounts[track.id] = 0
-                case .failed:
-                    let error = item.error?.localizedDescription ?? "Unknown error"
-                    print("❌ \(track.name) player item failed: \(error)")
-                    
-                    // Retry loading if we haven't exceeded max retries
-                    let currentRetries = self.retryCounts[track.id] ?? 0
-                    if currentRetries < self.maxRetries {
-                        self.retryCounts[track.id] = currentRetries + 1
-                        let delay = Double(currentRetries + 1) * 1.0 // Exponential backoff: 1s, 2s, 3s
-                        print("🔄 Retrying \(track.name) in \(delay)s (attempt \(currentRetries + 1)/\(self.maxRetries))")
+                let status = item.status
+                let statusRawValue = item.status.rawValue
+                let errorDescription = item.error?.localizedDescription
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    switch status {
+                    case .readyToPlay:
+                        print("✅ \(track.name) player item is ready to play")
+                        self.retryCounts[track.id] = 0
+                    case .failed:
+                        let error = errorDescription ?? "Unknown error"
+                        print("❌ \(track.name) player item failed: \(error)")
                         
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                            guard let self = self else { return }
-                            // Clean up failed player
-                            self.audioPlayers[track.id]?.pause()
-                            self.audioPlayers.removeValue(forKey: track.id)
-                            self.playerLooper[track.id]?.disableLooping()
-                            self.playerLooper.removeValue(forKey: track.id)
+                        let currentRetries = self.retryCounts[track.id] ?? 0
+                        if currentRetries < self.maxRetries {
+                            self.retryCounts[track.id] = currentRetries + 1
+                            let delay = Double(currentRetries + 1) * 1.0 // Exponential backoff: 1s, 2s, 3s
+                            print("🔄 Retrying \(track.name) in \(delay)s (attempt \(currentRetries + 1)/\(self.maxRetries))")
                             
-                            // Retry loading - capture track before Task
-                            let trackToRetry = track
-                            Task {
-                                await self.preloadTrackImmediately(trackToRetry)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                                guard let self = self else { return }
+                                self.audioPlayers[track.id]?.pause()
+                                self.audioPlayers.removeValue(forKey: track.id)
+                                self.playerLooper[track.id]?.disableLooping()
+                                self.playerLooper.removeValue(forKey: track.id)
+                                
+                                let trackToRetry = track
+                                Task {
+                                    await self.preloadTrackImmediately(trackToRetry)
+                                }
                             }
+                        } else {
+                            print("❌ \(track.name) failed after \(self.maxRetries) retries. Check network connection.")
                         }
-                    } else {
-                        print("❌ \(track.name) failed after \(self.maxRetries) retries. Check network connection.")
+                    case .unknown:
+                        print("⚠️ \(track.name) player item status unknown")
+                    @unknown default:
+                        print("⚠️ \(track.name) player item status: \(statusRawValue)")
                     }
-                case .unknown:
-                    print("⚠️ \(track.name) player item status unknown")
-                @unknown default:
-                    print("⚠️ \(track.name) player item status: \(item.status.rawValue)")
                 }
             }
             
-            // Store observer to keep it alive and allow cleanup
+            // MainActor-isolated assignment. Invalidate any stale observer for
+            // this track first so we don't leak a live KVO subscription when
+            // the same track is preloaded twice in quick succession.
+            statusObservers[track.id]?.invalidate()
             statusObservers[track.id] = statusObserver
-            // Store observer to keep it alive (observation stops when observer is deallocated)
-            _ = statusObserver
             
             // Buffer settings already applied via performanceOptimizer
             
