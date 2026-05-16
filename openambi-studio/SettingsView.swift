@@ -5,7 +5,6 @@ struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var audioManager: AudioManager
     @StateObject private var settingsManager = SettingsManager.shared
-    @State private var searchText = ""
     @State private var showSignIn = false
     @State private var showAccountDetails = false
     @State private var showDeleteAccount = false
@@ -19,65 +18,34 @@ struct SettingsView: View {
     
     var body: some View {
         ZStack {
-            // Background color matching iOS Settings exactly
-            Color(red: 0.949, green: 0.949, blue: 0.969)
+            // Atelier scene background (Phase 4.1) — matches the rest of
+            // the IA. The v1 used a clone of the iOS Settings sheet
+            // background (light grey #F2F2F7) which broke the brand
+            // entirely as soon as you swiped over here from the Studio.
+            // The new background is the same AppTheme.background as the
+            // Studio, with the rain-tinted DynamicLoadingBackground
+            // wash for warmth and continuity.
+            AppTheme.background
                 .ignoresSafeArea(.all)
-            
+            DynamicLoadingBackground(trackName: "Rain")
+                .opacity(0.55)
+                .ignoresSafeArea(.all)
+                .allowsHitTesting(false)
+
             GeometryReader { geometry in
                 ScrollView {
                     VStack(spacing: 0) {
-                        // Top safe area padding to ensure heading is fully visible
+                        // Editorial Atelier header sits where the iOS-
+                        // grey 'Settings' title used to. Search was
+                        // removed in 2.0 — the room is small enough to
+                        // browse, and a search field would have been a
+                        // tell that this is still iOS Settings under
+                        // the hood.
                         Spacer()
-                            .frame(height: geometry.safeAreaInsets.top + 80)
-                        
-                        // Settings title at top
-                        HStack {
-                            Text("Settings")
-                                .font(.system(size: 34, weight: .bold))
-                                .foregroundColor(.primary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .padding(.bottom, 8)
-                        
-                        // Search Bar - iOS style
-                        HStack(spacing: 12) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                    .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                    .font(.system(size: 17))
-                                
-                                TextField("Search", text: $searchText)
-                                    .font(.system(size: 17))
-                                    .foregroundColor(.primary)
-                                
-                                if !searchText.isEmpty {
-                                    Button(action: { searchText = "" }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                            .font(.system(size: 14))
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(Color(red: 0.898, green: 0.898, blue: 0.918))
-                            .cornerRadius(10)
-                            
-                            if !searchText.isEmpty {
-                                Button("Cancel") {
-                                    withAnimation {
-                                        searchText = ""
-                                    }
-                                }
-                                .foregroundColor(.blue)
-                                .font(.system(size: 17))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .padding(.bottom, 20)
+                            .frame(height: geometry.safeAreaInsets.top + AppSpacing.sm)
+
+                        AtelierHeader(isAuthenticated: authManager.isAuthenticated)
+                            .padding(.bottom, AppSpacing.lg)
                         
                         // Account Section
                         if authManager.isAuthenticated, let user = authManager.currentUser {
