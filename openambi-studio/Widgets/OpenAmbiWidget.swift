@@ -110,7 +110,7 @@ struct OpenAmbiWidget: Widget {
         StaticConfiguration(kind: kind, provider: OpenAmbiProvider()) { entry in
             OpenAmbiWidgetView(entry: entry)
         }
-        .configurationDisplayName("OpenAmbi")
+        .configurationDisplayName("openambi")
         .description("Control your ambient soundscape from the Home Screen")
         .supportedFamilies([.systemSmall, .systemMedium])
     }

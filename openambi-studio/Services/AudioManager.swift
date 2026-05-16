@@ -1084,7 +1084,7 @@ class AudioManager: ObservableObject {
             // Create a combined title from active tracks
             let trackNames = activeTracks.map { $0.name }.joined(separator: " • ")
             nowPlayingInfo[MPMediaItemPropertyTitle] = trackNames
-            nowPlayingInfo[MPMediaItemPropertyArtist] = "OpenAmbi"
+            nowPlayingInfo[MPMediaItemPropertyArtist] = "openambi"
             nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = "Ambient Soundscape"
             
             // CRITICAL: iOS requires a non-zero duration for lock screen controls to appear
@@ -1104,7 +1104,7 @@ class AudioManager: ObservableObject {
             print("   Duration: 3600.0")
             print("   Active tracks: \(activeTracks.count)")
         } else {
-            nowPlayingInfo[MPMediaItemPropertyTitle] = "OpenAmbi"
+            nowPlayingInfo[MPMediaItemPropertyTitle] = "openambi"
             nowPlayingInfo[MPMediaItemPropertyArtist] = "No active sounds"
             nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
             nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = 0.0

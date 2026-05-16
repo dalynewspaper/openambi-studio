@@ -44,6 +44,8 @@
 		P1R2O3F4I5L6E7E8D9I0T1V2 /* ProfileEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */; };
 		S1E2T3T4I5N6G7S8V9I0E1W2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */; };
 		S2E3T4I5N6G7S8V9I0E1W4 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */; };
+		BD000000000000000000B100 /* BrandRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B101 /* BrandRing.swift */; };
+		BD000000000000000000B200 /* Wordmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B201 /* Wordmark.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +113,8 @@
 		P1R2O3F4I5L6E7E8D9I0T1V3 /* ProfileEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditView.swift; sourceTree = "<group>"; };
 		S1E2T3T4I5N6G7S8V9I0E1W3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		BD000000000000000000B101 /* BrandRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandRing.swift; sourceTree = "<group>"; };
+		BD000000000000000000B201 /* Wordmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wordmark.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -185,6 +189,7 @@
 				F3A4B5C6D7E8F9A0B1C2D3E4 /* Config */,
 				F5A6B7C8D9E0F1A2B3C4D5E8 /* Intents */,
 				F4A5B6C7D8E9F0A1B2C3D4E5 /* Fonts */,
+				BD000000000000000000B000 /* Brand */,
 			);
 			path = "openambi-studio";
 			sourceTree = "<group>";
@@ -204,6 +209,15 @@
 				B2C3D4E5F6A7B8C9D0E1F2A4 /* AudioTrack.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		BD000000000000000000B000 /* Brand */ = {
+			isa = PBXGroup;
+			children = (
+				BD000000000000000000B101 /* BrandRing.swift */,
+				BD000000000000000000B201 /* Wordmark.swift */,
+			);
+			path = Brand;
 			sourceTree = "<group>";
 		};
 		F2A3B4C5D6E7F8A9B0C1D2E3 /* Services */ = {
@@ -386,6 +400,8 @@
 				P1R2O3F4I5L6E7E8D9I0T1V2 /* ProfileEditView.swift in Sources */,
 				953F37B32EE3A793007EA25C /* RecordingManager.swift in Sources */,
 				S2E3T4I5N6G7S8V9I0E1W4 /* SettingsManager.swift in Sources */,
+				BD000000000000000000B100 /* BrandRing.swift in Sources */,
+				BD000000000000000000B200 /* Wordmark.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

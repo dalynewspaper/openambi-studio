@@ -23,12 +23,12 @@
 		</dict>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>OpenAmbi needs access to your microphone to record ambient sounds for your personal sound library.</string>
+	<string>openambi needs access to your microphone to record ambient sounds for your personal sound library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>OpenAmbi would like to capture the location where you record sounds to help organize your recordings.</string>
+	<string>openambi would like to capture the location where you record sounds to help organize your recordings.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>OpenAmbi would like to capture photos to accompany your sound recordings.</string>
+	<string>openambi would like to capture photos to accompany your sound recordings.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>OpenAmbi would like to access your photo library to select images for your sound recordings.</string>
+	<string>openambi would like to access your photo library to select images for your sound recordings.</string>
 </dict>
 </plist>

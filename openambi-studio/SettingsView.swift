@@ -634,7 +634,7 @@ struct PrivacyPolicyView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.secondary)
                     
-                    Text("Your privacy is important to us. This Privacy Policy explains how OpenAmbi collects, uses, and protects your information.")
+                    Text("Your privacy is important to us. This Privacy Policy explains how openambi collects, uses, and protects your information.")
                         .font(.system(size: 17))
                         .padding(.top, 8)
                     
@@ -671,7 +671,7 @@ struct TermsOfServiceView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.secondary)
                     
-                    Text("By using OpenAmbi, you agree to these Terms of Service.")
+                    Text("By using openambi, you agree to these Terms of Service.")
                         .font(.system(size: 17))
                         .padding(.top, 8)
                     
@@ -704,7 +704,7 @@ struct AcknowledgementsView: View {
                         .font(.system(size: 28, weight: .bold))
                         .padding(.bottom, 8)
                     
-                    Text("OpenAmbi uses the following open-source libraries and frameworks:")
+                    Text("openambi uses the following open-source libraries and frameworks:")
                         .font(.system(size: 17))
                         .padding(.top, 8)
                     

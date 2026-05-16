@@ -51,7 +51,7 @@ struct AmbientMixerView: View {
     
     private var headerSection: some View {
         VStack(spacing: 8) {
-            Text("OpenAmbi")
+            Text("openambi")
                 .font(.system(size: 48, weight: .ultraLight, design: .rounded))
                 .foregroundStyle(
                     LinearGradient(
