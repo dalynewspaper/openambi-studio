@@ -49,6 +49,15 @@ struct ContentView: View {
                             PageRail(selectedIndex: $selectedTab)
                                 .padding(.bottom, 18)
                         }
+                        // The dominant sound color (Phase 3.3) is the
+                        // loudest active track's brand color, animated
+                        // via a long Motion.breath ease so swapping the
+                        // mix doesn't snap chrome between tints. Every
+                        // descendant — PageRail, AuroraGlass edges, the
+                        // Studio header glow — picks this up via
+                        // @Environment(\.dominantSoundColor).
+                        .environment(\.dominantSoundColor, dominantSoundColor)
+                        .animation(Motion.breath, value: dominantSoundColor)
                         .transition(.opacity)
                     } else {
                         // Show same background as loading screen during transition
@@ -91,6 +100,28 @@ struct ContentView: View {
     private func getStartingTrackName() -> String {
         // Always use Rain track - ensures consistent, calm experience on launch
         return "Rain"
+    }
+
+    /// The currently dominant sound color across the live mix (Phase 3.3).
+    ///
+    /// Algorithm: take the loudest active track. If nothing is active, fall
+    /// back to `SoundColor.rain` so chrome has a calm default. Volume is the
+    /// only weight — for the user, the loudest sound *is* the dominant one;
+    /// this matches what they hear without us having to do perceptual
+    /// blending across multiple tints (which would just produce mud).
+    ///
+    /// This intentionally lives in ContentView rather than the Studio so
+    /// the Field room and the Atelier also receive the color. The Studio's
+    /// active mix is the "what the room sounds like right now" signal for
+    /// the entire app.
+    private var dominantSoundColor: Color {
+        let active = audioManager.tracks
+            .filter { $0.isActive && $0.volume > 0.01 }
+            .sorted { $0.volume > $1.volume }
+        guard let loudest = active.first else {
+            return SoundColor.rain
+        }
+        return SoundColor.colorForTrack(loudest.name)
     }
 }
 

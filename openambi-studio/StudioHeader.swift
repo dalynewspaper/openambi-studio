@@ -21,14 +21,32 @@ struct StudioHeader: View {
 
     let activeTracks: [AudioTrack]
 
+    @Environment(\.dominantSoundColor) private var dominant
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulse: Bool = false
+
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Studio")
-                    .font(AuroraTypography.editorial(11, weight: .medium))
-                    .kerning(2.4)
-                    .textCase(.uppercase)
-                    .foregroundColor(AuroraColors.TextOnAurora.tertiary)
+                HStack(alignment: .center, spacing: 6) {
+                    // "Now playing" indicator dot — picks up the live
+                    // mix's dominant color via @Environment(.dominantSoundColor)
+                    // and breathes when there is something to listen to.
+                    // When silent it stays small and dim so the dot reads
+                    // as 'standby' rather than missing.
+                    Circle()
+                        .fill(dominant)
+                        .frame(width: isLive ? 7 : 5, height: isLive ? 7 : 5)
+                        .opacity(dotOpacity)
+                        .shadow(color: dominant.opacity(isLive ? 0.55 : 0), radius: isLive ? 6 : 0)
+                        .accessibilityHidden(true)
+
+                    Text("Studio")
+                        .font(AuroraTypography.editorial(11, weight: .medium))
+                        .kerning(2.4)
+                        .textCase(.uppercase)
+                        .foregroundColor(AuroraColors.TextOnAurora.tertiary)
+                }
 
                 Text(sceneMood)
                     .font(AuroraTypography.editorial(15, weight: .semibold))
@@ -43,8 +61,30 @@ struct StudioHeader: View {
                 .layoutPriority(0)
         }
         .padding(.horizontal, 18)
+        .onAppear { startBreathLoopIfNeeded() }
+        .onChange(of: isLive) { _, _ in startBreathLoopIfNeeded() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Studio. \(accessibilityMood)")
+    }
+
+    private var isLive: Bool { !activeTracks.isEmpty }
+
+    /// Static opacity when the room is silent or motion is reduced; breathes
+    /// between 0.55 and 0.95 otherwise. The pulse value is the actual driver.
+    private var dotOpacity: Double {
+        guard isLive else { return 0.22 }
+        if reduceMotion { return 0.78 }
+        return pulse ? 0.95 : 0.55
+    }
+
+    private func startBreathLoopIfNeeded() {
+        guard isLive, !reduceMotion else { return }
+        // Long, calm autoreversing breath. Driving from a single `pulse`
+        // boolean with a repeating autoreverse animation keeps the loop
+        // confined to this view's render cycle.
+        withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
+            pulse = true
+        }
     }
 
     // MARK: - Mood composition
