@@ -29,6 +29,6 @@
 	<key>NSCameraUsageDescription</key>
 	<string>openambi would like to capture photos to accompany your sound recordings.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>openambi would like to access your photo library to select images for your sound recordings.</string>
+	<string>openambi would like to access your photo library to choose photos or short videos for your sound library.</string>
 </dict>
 </plist>
