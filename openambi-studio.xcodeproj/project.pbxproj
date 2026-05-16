@@ -47,6 +47,7 @@
 		BD000000000000000000B100 /* BrandRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B101 /* BrandRing.swift */; };
 		BD000000000000000000B200 /* Wordmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B201 /* Wordmark.swift */; };
 		BD000000000000000000B300 /* AuroraTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B301 /* AuroraTokens.swift */; };
+		BD000000000000000000B400 /* InstrumentFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD000000000000000000B401 /* InstrumentFeedback.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -117,6 +118,7 @@
 		BD000000000000000000B101 /* BrandRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandRing.swift; sourceTree = "<group>"; };
 		BD000000000000000000B201 /* Wordmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wordmark.swift; sourceTree = "<group>"; };
 		BD000000000000000000B301 /* AuroraTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuroraTokens.swift; sourceTree = "<group>"; };
+		BD000000000000000000B401 /* InstrumentFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentFeedback.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -237,6 +239,7 @@
 				F7A8B9C0D1E2F3A4B5C6D7E9 /* FrequencyGenerator.swift */,
 				F8A9B0C1D2E3F4A5B6C7D8E9F1 /* FrequencyPresetService.swift */,
 				S2E3T4I5N6G7S8V9I0E1W5 /* SettingsManager.swift */,
+				BD000000000000000000B401 /* InstrumentFeedback.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -406,6 +409,7 @@
 				BD000000000000000000B100 /* BrandRing.swift in Sources */,
 				BD000000000000000000B200 /* Wordmark.swift in Sources */,
 				BD000000000000000000B300 /* AuroraTokens.swift in Sources */,
+				BD000000000000000000B400 /* InstrumentFeedback.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

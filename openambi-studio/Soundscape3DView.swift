@@ -435,11 +435,7 @@ struct Soundscape3DView: View {
                 
                 // Only trigger haptic when crossing milestone upward
                 if currentMilestone > previousMilestone && currentMilestone > 0 {
-                    // Progressive haptic intensity
-                    let style: UIImpactFeedbackGenerator.FeedbackStyle = currentMilestone >= 3 ? .medium : .light
-                    let impact = UIImpactFeedbackGenerator(style: style)
-                    impact.prepare()
-                    impact.impactOccurred()
+                    InstrumentFeedback.threshold(at: currentMilestone >= 3 ? .major : .minor)
                 }
             }
         } else {
@@ -909,10 +905,7 @@ struct PullableSoundOrb: View {
                 }
         )
         .onTapGesture {
-            // Enhanced tap feedback
-            let impact = UIImpactFeedbackGenerator(style: .medium)
-            impact.prepare()
-            impact.impactOccurred()
+            InstrumentFeedback.tap()
             
             // Visual feedback with scale animation
             withAnimation(AppTheme.Animation.quick) {
@@ -1443,14 +1436,7 @@ struct CentralHubView: View {
             
             // Main hub
             Button {
-                // Enhanced haptic feedback for central hub
-                let impact = UIImpactFeedbackGenerator(style: .heavy)
-                impact.prepare()
-                impact.impactOccurred()
-                
-                // Additional selection feedback
-                let selection = UISelectionFeedbackGenerator()
-                selection.selectionChanged()
+                InstrumentFeedback.cinema()
                 
                 if audioManager.isPlaying {
                     audioManager.pause()
@@ -2061,10 +2047,7 @@ struct GridSoundItem: View {
             // Only toggle if not dragging
             guard !isDraggingToDockLocal else { return }
             
-            // Haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.prepare()
-            impact.impactOccurred()
+            InstrumentFeedback.tap()
             
             // Toggle track on/off
             if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
@@ -2112,10 +2095,7 @@ struct GridSoundItem: View {
                         currentGlobalCenter = itemPosition
                         // Notify parent to disable scrolling
                         isDraggingToDock.insert(track.id)
-                        // Light haptic feedback on drag start
-                        let impact = UIImpactFeedbackGenerator(style: .light)
-                        impact.prepare()
-                        impact.impactOccurred()
+                        InstrumentFeedback.dragStart()
                     }
                     
                     // Update drag offset - free movement (x and y)
@@ -2196,10 +2176,7 @@ struct GridSoundItem: View {
                             volume = 0.85
                         }
                         
-                        // Medium haptic feedback on successful drop
-                        let impact = UIImpactFeedbackGenerator(style: .medium)
-                        impact.prepare()
-                        impact.impactOccurred()
+                        InstrumentFeedback.dragEnd()
                         
                         // Activate track and add to mix with calculated volume
                         // Always update when dropped into dock, regardless of current state
@@ -2242,10 +2219,7 @@ struct GridSoundItem: View {
                 .onChanged { value in
                     if !isDragging {
                         isDragging = true
-                        // Haptic feedback on drag start
-                        let impact = UIImpactFeedbackGenerator(style: .light)
-                        impact.prepare()
-                        impact.impactOccurred()
+                        InstrumentFeedback.dragStart()
                     }
                     
                     // Calculate angle from center
@@ -2314,9 +2288,7 @@ struct GridSoundItem: View {
                         let newMilestone = Int(clampedVolume * 4)
                         
                         if newMilestone != oldMilestone && newMilestone >= 0 && newMilestone <= 4 {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.prepare()
-                            impact.impactOccurred()
+                            InstrumentFeedback.threshold(at: (newMilestone == 0 || newMilestone == 4) ? .major : .minor)
                         }
                         
                         // Update track volume
@@ -2374,10 +2346,7 @@ struct GridSoundItem: View {
             
             print("🎵 Toggling track: \(track.name) to \(newState ? "ON" : "OFF")")
             
-            // Haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: newState ? .medium : .light)
-            impact.prepare()
-            impact.impactOccurred()
+            InstrumentFeedback.toggle(active: newState)
             
             // Update track state
             if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
@@ -2851,9 +2820,7 @@ struct SoundControlModal: View {
             
             // Remove button - standard Button (no gesture conflicts)
             Button(action: {
-                // Haptic feedback
-                let impact = UIImpactFeedbackGenerator(style: .medium)
-                impact.impactOccurred()
+                InstrumentFeedback.dragEnd()
                 
                 print("🗑️ Remove from Mix: \(track.name)")
                 
@@ -2935,10 +2902,7 @@ struct SoundControlModal: View {
                                 // Haptic feedback at milestones
                                 let milestone = Int(newVolume * 4)
                                 if milestone != Int((value.startLocation.x / geometry.size.width) * 4) {
-                                    let intensity: UIImpactFeedbackGenerator.FeedbackStyle = 
-                                        (milestone == 0 || milestone == 4) ? .medium : .light
-                                    let impact = UIImpactFeedbackGenerator(style: intensity)
-                                    impact.impactOccurred()
+                                    InstrumentFeedback.threshold(at: (milestone == 0 || milestone == 4) ? .major : .minor)
                                 }
                             }
                             .onEnded { value in
@@ -3166,9 +3130,7 @@ struct DockSoundChip: View {
         .frame(width: baseSize, height: baseSize)
         .contentShape(Rectangle())
         .onTapGesture {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.prepare()
-            impact.impactOccurred()
+            InstrumentFeedback.tap()
             onTap()
         }
     }
@@ -3229,10 +3191,7 @@ struct MasterVolumeSlider: View {
                                     let newMilestone = Int(clampedVolume * 4)
                                     
                                     if newMilestone != oldMilestone && newMilestone >= 0 && newMilestone <= 4 {
-                                        let intensity: UIImpactFeedbackGenerator.FeedbackStyle =
-                                            (newMilestone == 0 || newMilestone == 4) ? .medium : .light
-                                        let impact = UIImpactFeedbackGenerator(style: intensity)
-                                        impact.impactOccurred()
+                                        InstrumentFeedback.threshold(at: (newMilestone == 0 || newMilestone == 4) ? .major : .minor)
                                     }
                                 }
                                 .onEnded { value in

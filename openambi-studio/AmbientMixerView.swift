@@ -297,9 +297,7 @@ struct EnhancedTrackCard: View {
             Slider(value: Binding(
                 get: { track.volume },
                 set: { newValue in
-                        // Haptic feedback
-                        let impact = UIImpactFeedbackGenerator(style: .light)
-                        impact.impactOccurred()
+                        InstrumentFeedback.threshold(at: .minor)
                         
                     track.volume = newValue
                     audioManager.updateTrackVolume(track.id, volume: newValue)
@@ -360,9 +358,7 @@ struct EnhancedPresetCard: View {
     
     var body: some View {
         Button(action: {
-            // Haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: .medium)
-            impact.impactOccurred()
+            InstrumentFeedback.preset(applied: preset.name)
             action()
         }) {
             VStack(spacing: 16) {
@@ -438,8 +434,7 @@ struct EnhancedMasterControls: View {
         VStack(spacing: 32) {
             // Enhanced play/pause button
             Button {
-                let impact = UIImpactFeedbackGenerator(style: .heavy)
-                impact.impactOccurred()
+                InstrumentFeedback.cinema()
                 
                 if audioManager.isPlaying {
                     audioManager.pause()
@@ -524,8 +519,7 @@ struct EnhancedMasterControls: View {
                             )
                         )
                         .onChange(of: audioManager.masterVolume) { _, newValue in
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
+                            InstrumentFeedback.threshold(at: .minor)
                             audioManager.updateMasterVolume(newValue)
                         }
                     
