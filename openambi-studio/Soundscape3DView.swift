@@ -1408,6 +1408,7 @@ struct ImmersiveBackground: View {
     let activeTracks: [AudioTrack]
     @State private var colorOrbs: [ColorOrb] = []
     @State private var animationTimer: Timer?
+    @ObservedObject private var featureFlags = AmbientFeatureFlags.shared
     
     struct ColorOrb: Identifiable {
         let id = UUID()
@@ -1449,36 +1450,45 @@ struct ImmersiveBackground: View {
                     }
                 }
                 
-                // Floating color orbs (3-5 orbs)
-                ForEach(colorOrbs) { orb in
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    orb.color.opacity(orb.opacity),
-                                    orb.color.opacity(orb.opacity * 0.5),
-                                    orb.color.opacity(0.0)
-                                ],
-                                center: .center,
-                                startRadius: orb.size * 0.3,
-                                endRadius: orb.size
+                // Floating color orbs (3-5 orbs) — gated by Low Power Mode
+                if featureFlags.allowFloatingColorOrbs {
+                    ForEach(colorOrbs) { orb in
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        orb.color.opacity(orb.opacity),
+                                        orb.color.opacity(orb.opacity * 0.5),
+                                        orb.color.opacity(0.0)
+                                    ],
+                                    center: .center,
+                                    startRadius: orb.size * 0.3,
+                                    endRadius: orb.size
+                                )
                             )
-                        )
-                        .frame(width: orb.size, height: orb.size)
-                        .position(orb.position)
-                        .blur(radius: orb.size * 0.2)
-                        .scaleEffect(1.0 + sin(orb.pulsePhase) * 0.2)
+                            .frame(width: orb.size, height: orb.size)
+                            .position(orb.position)
+                            .blur(radius: orb.size * 0.2)
+                            .scaleEffect(1.0 + sin(orb.pulsePhase) * 0.2)
+                    }
                 }
                 
-                // Active sound color orbs (pulsing with volume)
+                // Active sound color orbs (pulsing with volume).
+                //
+                // Position is derived deterministically from `track.id` so the
+                // orbs do not jump to a new spot every time the body re-renders
+                // (e.g. when a track's volume changes). Previously this used
+                // `Double.random(in:)` inside the body, which produced visible
+                // flicker on every tracker update.
                 ForEach(activeTracks, id: \.id) { track in
                     let color = SoundColor.colorForTrack(track.name)
+                    let offset = Self.stablePositionOffset(for: track.id)
                     DynamicColorOrb(
                         color: color,
                         volume: track.volume,
                         position: CGPoint(
-                            x: geometry.size.width * (0.2 + Double.random(in: 0...0.6)),
-                            y: geometry.size.height * (0.2 + Double.random(in: 0...0.6))
+                            x: geometry.size.width * (0.2 + 0.6 * offset.x),
+                            y: geometry.size.height * (0.2 + 0.6 * offset.y)
                         )
                     )
                 }
@@ -1499,6 +1509,18 @@ struct ImmersiveBackground: View {
                 updateOrbsForActiveTracks()
             }
         }
+    }
+
+    /// Maps a track id to a stable point in [0, 1) × [0, 1) so each active
+    /// track always lights up the same region of the scene. Splits the
+    /// UUID into two 64-bit halves and normalizes each to a Double.
+    private static func stablePositionOffset(for id: UUID) -> (x: Double, y: Double) {
+        let bytes = withUnsafeBytes(of: id.uuid) { Array($0) }
+        let hi = bytes.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+        let lo = bytes.suffix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+        let x = Double(hi) / Double(UInt64.max)
+        let y = Double(lo) / Double(UInt64.max)
+        return (x, y)
     }
     
     private func generateColorOrbs() {
