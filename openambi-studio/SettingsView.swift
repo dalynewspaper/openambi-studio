@@ -59,366 +59,25 @@ struct SettingsView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 28)
                         
-                        // Account Settings Group (if authenticated)
-                        if authManager.isAuthenticated {
-                            SettingsGroup {
-                                // "My Recordings" intentionally removed in
-                                // openambi 2.0 — the library now lives in
-                                // the Field room (swipe right to open).
-                                Button(action: {
-                                    // Open subscription management
-                                }) {
-                                    SettingsRow(
-                                        icon: "creditcard",
-                                        iconColor: .blue,
-                                        title: "Manage Subscription",
-                                        showDivider: true,
-                                        trailing: {
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                                .font(.system(size: 14, weight: .semibold))
-                                        }
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                
-                                Button(action: {
-                                    showDeleteAccount = true
-                                }) {
-                                    SettingsRow(
-                                        icon: "trash",
-                                        iconColor: .red,
-                                        title: "Delete Account",
-                                        showDivider: false,
-                                        trailing: {
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                                .font(.system(size: 14, weight: .semibold))
-                                        }
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
+                        // Editorial section stack (Phase 4.3). The v1
+                        // had six unnamed white SettingsGroups stacked
+                        // generically; the new Atelier names each
+                        // workspace and gives it a one-line caption so
+                        // the user has a sense of what the room is
+                        // actually about.
+                        VStack(spacing: AppSpacing.lg) {
+                            listeningSection
+                            audioSection
+                            preferencesSection
+                            notificationsSection
+                            librarySection
+                            if authManager.isAuthenticated {
+                                accountSection
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 32)
-                        }
-                        
-                        // Playback Settings Group
-                        SettingsGroup {
-                            SettingsRow(
-                                icon: "waveform",
-                                iconColor: .blue,
-                                title: "Fade In Duration",
-                                subtitle: FadeDuration(rawValue: settingsManager.fadeInDuration)?.displayName ?? "1s",
-                                showDivider: true,
-                                trailing: {
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                        .font(.system(size: 14, weight: .semibold))
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "waveform.path",
-                                iconColor: .blue,
-                                title: "Fade Out on Exit",
-                                subtitle: settingsManager.fadeOutOnExit ? "\(Int(settingsManager.fadeOutDuration))s" : "Off",
-                                showDivider: true,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.fadeOutOnExit)
-                                        .labelsHidden()
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "lock.fill",
-                                iconColor: .green,
-                                title: "Background Playback",
-                                subtitle: "Play audio when screen is locked",
-                                showDivider: true,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.backgroundPlayback)
-                                        .labelsHidden()
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "arrow.clockwise",
-                                iconColor: .blue,
-                                title: "Resume Last Mix",
-                                subtitle: settingsManager.resumeLastMix ? "On" : "Off",
-                                showDivider: false,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.resumeLastMix)
-                                        .labelsHidden()
-                                }
-                            )
+                            aboutSection
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 32)
-                        
-                        // Audio Quality Settings Group
-                        SettingsGroup {
-                            SettingsRow(
-                                icon: "music.note",
-                                iconColor: .purple,
-                                title: "Audio Quality",
-                                subtitle: settingsManager.audioQuality.rawValue,
-                                showDivider: true,
-                                trailing: {
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                        .font(.system(size: 14, weight: .semibold))
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "arrow.down.circle",
-                                iconColor: .blue,
-                                title: "Download Quality",
-                                subtitle: settingsManager.downloadQuality.rawValue,
-                                showDivider: false,
-                                trailing: {
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                        .font(.system(size: 14, weight: .semibold))
-                                }
-                            )
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 32)
-                        
-                        // Appearance Settings Group
-                        SettingsGroup {
-                            SettingsRow(
-                                icon: "paintbrush",
-                                iconColor: .gray,
-                                title: "Theme",
-                                subtitle: settingsManager.theme.rawValue,
-                                showDivider: true,
-                                trailing: {
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                        .font(.system(size: 14, weight: .semibold))
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "sparkles",
-                                iconColor: .blue,
-                                title: "Visual Effects",
-                                subtitle: settingsManager.liquidGlassEffects ? "Liquid Glass On" : "Off",
-                                showDivider: true,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.liquidGlassEffects)
-                                        .labelsHidden()
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "figure.walk",
-                                iconColor: .blue,
-                                title: "Reduce Motion",
-                                subtitle: settingsManager.reduceMotion ? "On" : "Off",
-                                showDivider: false,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.reduceMotion)
-                                        .labelsHidden()
-                                }
-                            )
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 32)
-                        
-                        // Notifications Settings Group
-                        SettingsGroup {
-                            SettingsRow(
-                                icon: "bell",
-                                iconColor: .orange,
-                                title: "New Scenes",
-                                subtitle: settingsManager.notificationsNewScenes ? "On" : "Off",
-                                showDivider: true,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.notificationsNewScenes)
-                                        .labelsHidden()
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "calendar",
-                                iconColor: .blue,
-                                title: "Daily Mix Suggestions",
-                                subtitle: settingsManager.notificationsDailyMix ? "On" : "Off",
-                                showDivider: true,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.notificationsDailyMix)
-                                        .labelsHidden()
-                                }
-                            )
-                            
-                            SettingsRow(
-                                icon: "heart",
-                                iconColor: .pink,
-                                title: "Relaxation Reminders",
-                                subtitle: settingsManager.notificationsRelaxation ? "On" : "Off",
-                                showDivider: false,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.notificationsRelaxation)
-                                        .labelsHidden()
-                                }
-                            )
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 32)
-                        
-                        // Data & Sync Settings Group
-                        SettingsGroup {
-                            SettingsRow(
-                                icon: "icloud",
-                                iconColor: .blue,
-                                title: "iCloud Sync",
-                                subtitle: settingsManager.iCloudSync ? "On" : "Off",
-                                showDivider: true,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.iCloudSync)
-                                        .labelsHidden()
-                                }
-                            )
-                            
-                            Button(action: {
-                                settingsManager.clearCachedAudio()
-                            }) {
-                                SettingsRow(
-                                    icon: "trash.circle",
-                                    iconColor: .orange,
-                                    title: "Clear Cached Audio",
-                                    subtitle: "Free up storage space",
-                                    showDivider: false,
-                                    trailing: {
-                                        Image(systemName: "chevron.right")
-                                            .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 32)
-                        
-                        // About & Privacy Settings Group
-                        SettingsGroup {
-                            Button(action: {
-                                showPrivacyPolicy = true
-                            }) {
-                                SettingsRow(
-                                    icon: "hand.raised",
-                                    iconColor: .blue,
-                                    title: "Privacy Policy",
-                                    showDivider: true,
-                                    trailing: {
-                                        Image(systemName: "chevron.right")
-                                            .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: {
-                                showTermsOfService = true
-                            }) {
-                                SettingsRow(
-                                    icon: "doc.text",
-                                    iconColor: .gray,
-                                    title: "Terms of Service",
-                                    showDivider: true,
-                                    trailing: {
-                                        Image(systemName: "chevron.right")
-                                            .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: {
-                                showAcknowledgements = true
-                            }) {
-                                SettingsRow(
-                                    icon: "info.circle",
-                                    iconColor: .blue,
-                                    title: "Acknowledgements",
-                                    showDivider: true,
-                                    trailing: {
-                                        Image(systemName: "chevron.right")
-                                            .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            SettingsRow(
-                                icon: "chart.bar",
-                                iconColor: .gray,
-                                title: "Analytics & Diagnostics",
-                                subtitle: settingsManager.analyticsEnabled ? "On" : "Off",
-                                showDivider: true,
-                                trailing: {
-                                    Toggle("", isOn: $settingsManager.analyticsEnabled)
-                                        .labelsHidden()
-                                }
-                            )
-                            
-                            // App Version
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.gray.opacity(0.15))
-                                        .frame(width: 28, height: 28)
-                                    
-                                    Image(systemName: "info.circle")
-                                        .foregroundColor(.gray)
-                                        .font(.system(size: 16, weight: .medium))
-                                }
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Version")
-                                        .font(.system(size: 17))
-                                        .foregroundColor(.primary)
-                                    
-                                    Text("1.0")
-                                        .font(.system(size: 15))
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 11)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 32)
-                        
-                        // Sign Out Button (if authenticated) - iOS style
-                        if authManager.isAuthenticated {
-                            Button(action: {
-                                Task { @MainActor in
-                                    await authManager.signOut()
-                                }
-                            }) {
-                                Text("Sign Out")
-                                    .font(.system(size: 17, weight: .regular))
-                                    .foregroundColor(.red)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .background(Color.white)
-                                    .cornerRadius(10)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 32)
-                        }
                     }
                 }
             }
@@ -450,6 +109,252 @@ struct SettingsView: View {
                 showSignIn = false
             }
         }
+    }
+
+    // MARK: - Editorial sections (Phase 4.3)
+
+    /// 'How the room behaves while playing.' — fades + the lock-screen
+    /// + the resume-last-mix preference. These are the toggles a user
+    /// touches when they want to set the *temperament* of playback.
+    private var listeningSection: some View {
+        AtelierSection("Listening", caption: "How the room behaves while playing.") {
+            AtelierRow(
+                icon: "waveform",
+                title: "Fade in duration",
+                subtitle: FadeDuration(rawValue: settingsManager.fadeInDuration)?.displayName ?? "1 second",
+                showsDividerAbove: false
+            ) {
+                rowChevron
+            }
+            AtelierRow(
+                icon: "waveform.path",
+                title: "Fade out on exit",
+                subtitle: settingsManager.fadeOutOnExit ? "\(Int(settingsManager.fadeOutDuration)) seconds" : "Off"
+            ) {
+                Toggle("", isOn: $settingsManager.fadeOutOnExit).labelsHidden()
+            }
+            AtelierRow(
+                icon: "lock.fill",
+                title: "Background playback",
+                subtitle: "Keep playing when the screen locks"
+            ) {
+                Toggle("", isOn: $settingsManager.backgroundPlayback).labelsHidden()
+            }
+            AtelierRow(
+                icon: "arrow.clockwise",
+                title: "Resume last mix",
+                subtitle: settingsManager.resumeLastMix ? "On" : "Off"
+            ) {
+                Toggle("", isOn: $settingsManager.resumeLastMix).labelsHidden()
+            }
+        }
+    }
+
+    /// 'How loud, how dense.' — quality tiers for streaming and offline.
+    private var audioSection: some View {
+        AtelierSection("Audio", caption: "How loud, how dense.") {
+            AtelierRow(
+                icon: "music.note",
+                title: "Streaming quality",
+                subtitle: settingsManager.audioQuality.rawValue,
+                showsDividerAbove: false
+            ) { rowChevron }
+            AtelierRow(
+                icon: "arrow.down.circle",
+                title: "Download quality",
+                subtitle: settingsManager.downloadQuality.rawValue
+            ) { rowChevron }
+        }
+    }
+
+    /// 'How the room looks and feels.' — visual + sensory preferences.
+    /// 'Atelier' as a section name would shadow the room itself, so
+    /// this lives under 'Preferences' instead.
+    private var preferencesSection: some View {
+        AtelierSection("Preferences", caption: "How the room looks and feels.") {
+            AtelierRow(
+                icon: "paintbrush",
+                title: "Theme",
+                subtitle: settingsManager.theme.rawValue,
+                showsDividerAbove: false
+            ) { rowChevron }
+            AtelierRow(
+                icon: "sparkles",
+                title: "Aurora glass",
+                subtitle: settingsManager.liquidGlassEffects ? "On" : "Off"
+            ) {
+                Toggle("", isOn: $settingsManager.liquidGlassEffects).labelsHidden()
+            }
+            AtelierRow(
+                icon: "figure.walk",
+                title: "Reduce motion",
+                subtitle: settingsManager.reduceMotion ? "On" : "Off"
+            ) {
+                Toggle("", isOn: $settingsManager.reduceMotion).labelsHidden()
+            }
+        }
+    }
+
+    /// 'When openambi can interrupt you.' — the calmer the better.
+    private var notificationsSection: some View {
+        AtelierSection("Notifications", caption: "When openambi can interrupt you.") {
+            AtelierRow(
+                icon: "bell",
+                title: "New scenes",
+                subtitle: settingsManager.notificationsNewScenes ? "On" : "Off",
+                showsDividerAbove: false
+            ) {
+                Toggle("", isOn: $settingsManager.notificationsNewScenes).labelsHidden()
+            }
+            AtelierRow(
+                icon: "calendar",
+                title: "Daily mix suggestions",
+                subtitle: settingsManager.notificationsDailyMix ? "On" : "Off"
+            ) {
+                Toggle("", isOn: $settingsManager.notificationsDailyMix).labelsHidden()
+            }
+            AtelierRow(
+                icon: "heart",
+                title: "Relaxation reminders",
+                subtitle: settingsManager.notificationsRelaxation ? "On" : "Off"
+            ) {
+                Toggle("", isOn: $settingsManager.notificationsRelaxation).labelsHidden()
+            }
+        }
+    }
+
+    /// 'Where your sounds live.' — sync + storage hygiene.
+    private var librarySection: some View {
+        AtelierSection("Library", caption: "Where your sounds live.") {
+            AtelierRow(
+                icon: "icloud",
+                title: "iCloud sync",
+                subtitle: settingsManager.iCloudSync ? "On" : "Off",
+                showsDividerAbove: false
+            ) {
+                Toggle("", isOn: $settingsManager.iCloudSync).labelsHidden()
+            }
+            Button(action: {
+                InstrumentFeedback.tap()
+                settingsManager.clearCachedAudio()
+            }) {
+                AtelierRow(
+                    icon: "trash.circle",
+                    title: "Clear cached audio",
+                    subtitle: "Free up storage space"
+                ) { rowChevron }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// 'Account.' — billing + the deletion door. Sign-out lives here too,
+    /// styled as a row rather than a hostile red button so it sits in
+    /// the same vocabulary as the rest of the Atelier.
+    private var accountSection: some View {
+        AtelierSection("Account", caption: "Billing and the door out.") {
+            Button(action: {
+                InstrumentFeedback.tap()
+            }) {
+                AtelierRow(
+                    icon: "creditcard",
+                    title: "Manage subscription",
+                    showsDividerAbove: false
+                ) { rowChevron }
+            }
+            .buttonStyle(.plain)
+
+            Button(action: {
+                InstrumentFeedback.tap()
+                Task { @MainActor in
+                    await authManager.signOut()
+                }
+            }) {
+                AtelierRow(
+                    icon: "rectangle.portrait.and.arrow.right",
+                    title: "Sign out"
+                ) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AuroraColors.IconOnAurora.inactive)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button(action: {
+                InstrumentFeedback.tap()
+                showDeleteAccount = true
+            }) {
+                AtelierRow(
+                    icon: "trash",
+                    title: "Delete account",
+                    subtitle: "This cannot be undone"
+                ) { rowChevron }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// 'About.' — colophon, links, version. The brand colophon at the
+    /// bottom (Phase 4.4) follows this section.
+    private var aboutSection: some View {
+        AtelierSection("About", caption: "Privacy, terms, and the credits.") {
+            Button(action: {
+                InstrumentFeedback.tap()
+                showPrivacyPolicy = true
+            }) {
+                AtelierRow(
+                    icon: "hand.raised",
+                    title: "Privacy policy",
+                    showsDividerAbove: false
+                ) { rowChevron }
+            }
+            .buttonStyle(.plain)
+
+            Button(action: {
+                InstrumentFeedback.tap()
+                showTermsOfService = true
+            }) {
+                AtelierRow(
+                    icon: "doc.text",
+                    title: "Terms of service"
+                ) { rowChevron }
+            }
+            .buttonStyle(.plain)
+
+            Button(action: {
+                InstrumentFeedback.tap()
+                showAcknowledgements = true
+            }) {
+                AtelierRow(
+                    icon: "info.circle",
+                    title: "Acknowledgements"
+                ) { rowChevron }
+            }
+            .buttonStyle(.plain)
+
+            AtelierRow(
+                icon: "chart.bar",
+                title: "Analytics & diagnostics",
+                subtitle: settingsManager.analyticsEnabled ? "On" : "Off"
+            ) {
+                Toggle("", isOn: $settingsManager.analyticsEnabled).labelsHidden()
+            }
+
+            AtelierRow(
+                icon: "number",
+                title: "Version",
+                subtitle: "1.0"
+            ) {
+                EmptyView()
+            }
+        }
+    }
+
+    private var rowChevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(AuroraColors.IconOnAurora.inactive)
     }
 }
 
@@ -683,168 +588,17 @@ struct AcknowledgementRow: View {
     }
 }
 
-// MARK: - Settings Profile Card
-struct SettingsProfileCard: View {
-    let name: String
-    let subtitle: String
-    let photoURL: String?
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Profile Picture - iOS style with gradient or photo
-                Group {
-                    if let photoURL = photoURL, let url = URL(string: photoURL) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 0.0, green: 0.478, blue: 1.0),
-                                            Color(red: 0.345, green: 0.337, blue: 0.839)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay(
-                                    Text(String(name.prefix(1)).uppercased())
-                                        .font(.system(size: 26, weight: .semibold))
-                                        .foregroundColor(.white)
-                                )
-                        }
-                        .frame(width: 60, height: 60)
-                        .clipShape(Circle())
-                    } else {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.0, green: 0.478, blue: 1.0), // iOS Blue
-                                        Color(red: 0.345, green: 0.337, blue: 0.839) // Purple
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                Group {
-                                    if name == "Sign In" {
-                                        Image(systemName: "person.circle.fill")
-                                            .font(.system(size: 30))
-                                            .foregroundColor(.white)
-                                    } else {
-                                        Text(String(name.prefix(1)).uppercased())
-                                            .font(.system(size: 26, weight: .semibold))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                            )
-                    }
-                }
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.primary)
-                    
-                    Text(subtitle)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .foregroundColor(Color(red: 0.557, green: 0.557, blue: 0.576))
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.white)
-            .cornerRadius(10)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - Settings Group
-struct SettingsGroup<Content: View>: View {
-    @ViewBuilder let content: Content
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            content
-        }
-        .background(Color.white)
-        .cornerRadius(10)
-        .overlay(
-            // Add subtle shadow like iOS
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
-        )
-    }
-}
-
-// MARK: - Settings Row
-struct SettingsRow<Trailing: View>: View {
-    let icon: String
-    let iconColor: Color
-    let title: String
-    var subtitle: String? = nil
-    var showDivider: Bool = true
-    @ViewBuilder let trailing: Trailing
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                // Icon - iOS style with colored background
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(iconColor.opacity(0.15))
-                        .frame(width: 28, height: 28)
-                    
-                    Image(systemName: icon)
-                        .foregroundColor(iconColor)
-                        .font(.system(size: 16, weight: .medium))
-                }
-                
-                // Title and Subtitle
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 17))
-                        .foregroundColor(.primary)
-                    
-                    if let subtitle = subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 15))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                // Trailing view (toggle, chevron, etc.)
-                trailing
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            
-            // Divider - only show if not last item
-            if showDivider {
-                Divider()
-                    .padding(.leading, 56) // Align with text after icon
-                    .opacity(0.3)
-            }
-        }
-    }
-}
+// SettingsProfileCard, SettingsGroup, and SettingsRow were removed
+// in Phase 4.3 of openambi 2.0. Their roles are now played by:
+//
+//   - AtelierIdentity (replaces SettingsProfileCard)
+//   - AtelierSection  (replaces SettingsGroup)
+//   - AtelierRow      (replaces SettingsRow)
+//
+// All three live in the AtelierIdentity.swift / AtelierSection.swift
+// files and use Aurora typography, AuroraGlass surfaces, and the
+// dominantSoundColor environment, so the Atelier reads as part of the
+// same brand surface as the Field and Studio.
 
 #Preview {
     SettingsView()
