@@ -21,6 +21,8 @@ struct Soundscape3DView: View {
     @State private var gridItemPositions: [UUID: CGPoint] = [:] // Track grid item positions for drag-to-dock
     @State private var uiMaterialized = false // Track if UI has materialized from cinematic
     @State private var hasLoadedData = false // Track if data has been loaded to prevent reloading
+    /// Horizontal library pages (Home Screen–style); persisted across sessions.
+    @AppStorage("studioLibraryPageIndex_v1") private var studioLibraryPageIndex: Int = 0
     
     // Constants
     private let dockHeight: CGFloat = 0.1 // Bottom 10% is dock
@@ -50,6 +52,46 @@ struct Soundscape3DView: View {
     private var sortedTracks: [AudioTrack] {
         // Return tracks in their original order - no sorting
         return audioManager.tracks
+    }
+
+    /// Vertical space available for the paged tile grid (below header block, above dock reserve).
+    private func studioGridViewportHeight(
+        geometry: GeometryProxy,
+        effectiveTopSafeArea: CGFloat,
+        effectiveBottomSafeArea: CGFloat,
+        sliderClearance: CGFloat,
+        activeTracksEmpty: Bool
+    ) -> CGFloat {
+        let topPad = effectiveTopSafeArea + AppSpacing.xl + AppSpacing.md + AppSpacing.md + sliderClearance
+        let bottomPad: CGFloat = activeTracksEmpty
+            ? (effectiveBottomSafeArea + AppSpacing.xxl)
+            : (effectiveBottomSafeArea + AppSpacing.md + 140)
+        return max(240, geometry.size.height - topPad - bottomPad)
+    }
+
+    /// Row height budget: orb + label stack + `LazyVGrid` row spacing (see `GridSoundItem`).
+    private func studioGridRowStride() -> CGFloat {
+        70 + 6 + 14 + AppSpacing.lg
+    }
+
+    /// How many tiles fit one “screen” of the library at this viewport height (4 columns × N rows).
+    private func studioTilesPerPage(forViewportHeight height: CGFloat) -> Int {
+        let rowStride = studioGridRowStride()
+        let rows = max(2, Int(floor(height / rowStride)))
+        return min(rows * 4, 48)
+    }
+
+    private func studioGridPages(from tracks: [AudioTrack], pageSize: Int) -> [[AudioTrack]] {
+        guard pageSize > 0 else { return tracks.isEmpty ? [] : [tracks] }
+        guard !tracks.isEmpty else { return [] }
+        var result: [[AudioTrack]] = []
+        var i = 0
+        while i < tracks.count {
+            let end = min(i + pageSize, tracks.count)
+            result.append(Array(tracks[i..<end]))
+            i = end
+        }
+        return result
     }
     
     var body: some View {
@@ -160,92 +202,119 @@ struct Soundscape3DView: View {
                     // tiles (the bug visible in the launch screenshots).
                     let sliderClearance: CGFloat = activeTracks.isEmpty ? 0 : (44 + AppSpacing.sm)
 
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            // Top spacing - drop icons down for better visual balance
-                            // Add 48px total margin (24px + 24px) to push elements into the app
-                            Spacer()
-                                .frame(height: effectiveTopSafeArea + AppSpacing.xl + AppSpacing.md + AppSpacing.md + sliderClearance)
-                            
-                            // Sound elements grid - iOS home screen style spacing
-                            LazyVGrid(
-                                columns: [
-                                    GridItem(.flexible(), spacing: AppSpacing.md), // Generous spacing between columns (iOS style)
-                                    GridItem(.flexible(), spacing: AppSpacing.md),
-                                    GridItem(.flexible(), spacing: AppSpacing.md),
-                                    GridItem(.flexible(), spacing: 0) // No trailing spacing to prevent cutoff
-                                ],
-                                spacing: AppSpacing.lg // Generous row spacing (iOS home screen style)
-                            ) {
-                                ForEach(sortedTracks, id: \.id) { track in
-                                    GridSoundItem(
-                                        track: Binding(
-                                            get: { track },
-                                            set: { newValue in
-                                                if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
-                                                    audioManager.tracks[index] = newValue
+                    let gridViewportHeight = studioGridViewportHeight(
+                        geometry: geometry,
+                        effectiveTopSafeArea: effectiveTopSafeArea,
+                        effectiveBottomSafeArea: effectiveBottomSafeArea,
+                        sliderClearance: sliderClearance,
+                        activeTracksEmpty: activeTracks.isEmpty
+                    )
+                    let pageSize = max(4, studioTilesPerPage(forViewportHeight: gridViewportHeight))
+                    let pages = studioGridPages(from: sortedTracks, pageSize: pageSize)
+                    let maxPageIndex = max(0, pages.count - 1)
+
+                    let gridColumns = [
+                        GridItem(.flexible(), spacing: AppSpacing.md),
+                        GridItem(.flexible(), spacing: AppSpacing.md),
+                        GridItem(.flexible(), spacing: AppSpacing.md),
+                        GridItem(.flexible(), spacing: 0)
+                    ]
+
+                    VStack(spacing: 0) {
+                        Spacer()
+                            .frame(height: effectiveTopSafeArea + AppSpacing.xl + AppSpacing.md + AppSpacing.md + sliderClearance)
+
+                        if sortedTracks.isEmpty {
+                            Color.clear
+                                .frame(height: gridViewportHeight)
+                        } else {
+                            TabView(selection: Binding(
+                                get: { min(studioLibraryPageIndex, maxPageIndex) },
+                                set: { studioLibraryPageIndex = $0 }
+                            )) {
+                                ForEach(Array(pages.enumerated()), id: \.offset) { pageIndex, pageTracks in
+                                    LazyVGrid(columns: gridColumns, spacing: AppSpacing.lg) {
+                                        ForEach(pageTracks, id: \.id) { track in
+                                            GridSoundItem(
+                                                track: Binding(
+                                                    get: { track },
+                                                    set: { newValue in
+                                                        if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                                                            audioManager.tracks[index] = newValue
+                                                        }
+                                                    }
+                                                ),
+                                                audioManager: audioManager,
+                                                soundsInVolumeMode: $soundsInVolumeMode,
+                                                isDraggingToDock: $isDraggingToDock,
+                                                dockFrame: dockFrame,
+                                                itemPosition: gridItemPositions[track.id] ?? .zero,
+                                                onLongPress: {
+                                                    if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
+                                                        var updatedTrack = audioManager.tracks[index]
+                                                        if !updatedTrack.isActive || updatedTrack.volume == 0 {
+                                                            updatedTrack.isActive = true
+                                                            updatedTrack.volume = 0.5
+                                                            audioManager.tracks[index] = updatedTrack
+                                                            audioManager.toggleTrack(track.id, isActive: true)
+                                                            audioManager.updateTrackVolume(track.id, volume: 0.5)
+                                                        }
+                                                    }
+                                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                        selectedTrackForModal = track
+                                                    }
                                                 }
-                                            }
-                                        ),
-                                        audioManager: audioManager,
-                                        soundsInVolumeMode: $soundsInVolumeMode,
-                                        isDraggingToDock: $isDraggingToDock,
-                                        dockFrame: dockFrame,
-                                        itemPosition: gridItemPositions[track.id] ?? .zero,
-                                        onLongPress: {
-                                            // Activate track and open modal
-                                            if let index = audioManager.tracks.firstIndex(where: { $0.id == track.id }) {
-                                                var updatedTrack = audioManager.tracks[index]
-                                                if !updatedTrack.isActive || updatedTrack.volume == 0 {
-                                                    updatedTrack.isActive = true
-                                                    updatedTrack.volume = 0.5 // Set default volume
-                                                    audioManager.tracks[index] = updatedTrack
-                                                    audioManager.toggleTrack(track.id, isActive: true)
-                                                    audioManager.updateTrackVolume(track.id, volume: 0.5)
-                                                }
-                                            }
-                                            // Open modal
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                selectedTrackForModal = track
-                                            }
+                                            )
+                                            .opacity(uiMaterialized ? 1.0 : 0.0)
+                                            .offset(y: uiMaterialized ? 0 : 20)
+                                            .transition(.asymmetric(
+                                                insertion: .scale.combined(with: .opacity),
+                                                removal: .opacity
+                                            ))
+                                            .animation(
+                                                .spring(response: 0.5, dampingFraction: 0.8)
+                                                    .delay(Double(pageTracks.firstIndex(where: { $0.id == track.id }) ?? 0) * 0.03),
+                                                value: uiMaterialized
+                                            )
                                         }
-                                    )
-                                    .opacity(uiMaterialized ? 1.0 : 0.0)
-                                    .offset(y: uiMaterialized ? 0 : 20)
-                                    .transition(.asymmetric(
-                                        insertion: .scale.combined(with: .opacity),
-                                        removal: .opacity
+                                    }
+                                    .padding(EdgeInsets(
+                                        top: 0,
+                                        leading: AppSpacing.lg,
+                                        bottom: AppSpacing.md,
+                                        trailing: AppSpacing.lg
                                     ))
-                                    .animation(
-                                        .spring(response: 0.5, dampingFraction: 0.8)
-                                        .delay(Double(sortedTracks.firstIndex(where: { $0.id == track.id }) ?? 0) * 0.03),
-                                        value: uiMaterialized
-                                    )
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .tag(pageIndex)
                                 }
                             }
-                            .padding(EdgeInsets(
-                                top: 0, // No top padding since we have spacer
-                                leading: AppSpacing.lg, // Generous edge padding (iOS style)
-                                bottom: AppSpacing.xxl + effectiveBottomSafeArea + AppSpacing.md, // Bottom padding with safe area + 24px margin
-                                trailing: AppSpacing.lg // Generous edge padding (iOS style)
-                            ))
-                            .frame(maxWidth: .infinity) // Ensure grid doesn't overflow
-                            .zIndex(0) // Grid below dock
+                            .tabViewStyle(.page(indexDisplayMode: pages.count > 1 ? .automatic : .never))
+                            .frame(height: gridViewportHeight)
+                            .onAppear {
+                                studioLibraryPageIndex = min(studioLibraryPageIndex, maxPageIndex)
+                            }
+                            .onChange(of: sortedTracks.count) { _, _ in
+                                let ps = max(4, studioTilesPerPage(forViewportHeight: gridViewportHeight))
+                                let newPages = studioGridPages(from: sortedTracks, pageSize: ps)
+                                let maxIdx = max(0, newPages.count - 1)
+                                if studioLibraryPageIndex > maxIdx {
+                                    studioLibraryPageIndex = maxIdx
+                                }
+                            }
+                            .onChange(of: geometry.size.height) { _, _ in
+                                let ps = max(4, studioTilesPerPage(forViewportHeight: gridViewportHeight))
+                                let newPages = studioGridPages(from: sortedTracks, pageSize: ps)
+                                let maxIdx = max(0, newPages.count - 1)
+                                if studioLibraryPageIndex > maxIdx {
+                                    studioLibraryPageIndex = maxIdx
+                                }
+                            }
                         }
-                    .background(
-                        GeometryReader { scrollGeometry in
-                            Color.clear
-                                .preference(key: ScrollOffsetPreferenceKey.self, 
-                                          value: scrollGeometry.frame(in: .named("scroll")).minY)
-                        }
-                    )
-                }
-                .coordinateSpace(name: "scroll")
-                .scrollDisabled(!soundsInVolumeMode.isEmpty || !isDraggingToDock.isEmpty) // Disable scrolling when dragging or in volume mode
-                .zIndex(0) // Grid below dock
-                .onPreferenceChange(GridItemPositionPreferenceKey.self) { positions in
-                    gridItemPositions = positions
-                }
+                    }
+                    .zIndex(0)
+                    .onPreferenceChange(GridItemPositionPreferenceKey.self) { positions in
+                        gridItemPositions = positions
+                    }
                 }
                 
                 // Dock - always shown at bottom when there are active tracks - hide when modal is open
@@ -2662,14 +2731,6 @@ struct MasterVolumeSlider: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Scroll Offset Preference Key
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
